@@ -73,3 +73,20 @@ export function requireAuth(handler) {
 	}
 }
 
+/**
+ * 要求管理员认证的中间件包装器
+ * 项目无角色体系, 内置超级管理员以 username === 'admin' 为唯一约定
+ * 组合 requireAuth 之后额外校验管理员身份
+ * @param {Function} handler - 实际的处理函数
+ * @returns {Function} 包装后的处理函数
+ */
+export function requireAdmin(handler) {
+	return requireAuth(async (args = {}) => {
+		const resp = args?.resp || base.resp
+		const req = args?.req || base.req
+		if (req.user?.username !== 'admin') {
+			return resp.status(403).json({ code: -1, msg: '无操作权限: 仅系统管理员可执行' })
+		}
+		return handler(args)
+	})
+}

@@ -16,6 +16,7 @@ import fileHandler from './_file.js'
 import firebaseHandler from './_firebase.js'
 import musicHandler from './_music.js'
 import noteHandler from './_note.js'
+import shareHandler from './_share.js'
 import subHandler from './_sub.js'
 import classHandler from './_zone/mzl/class.js'
 import studentHandler from './_zone/mzl/student.js'
@@ -82,6 +83,9 @@ export default async function masterHandler(req, res) {
 
 				case 'sub':
 					return await subHandler(req, res)
+
+				case 'share':
+					return await shareHandler(req, res)
 
 				case 'music':
 					return await musicHandler(req, res)
