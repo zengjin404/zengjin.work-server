@@ -1,1 +1,0 @@
-import{Ir as e,h as t,oi as n,zr as r}from"./index-UHAEZUgo.js";var i={};function a(t,i){return n(),r(`section`,null,[...i[0]||=[e(`h1`,null,`demo_4-2-1`,-1),e(`input`,null,null,-1)]])}var o=t(i,[[`render`,a]]);export{o as default};

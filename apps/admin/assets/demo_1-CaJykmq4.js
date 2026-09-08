@@ -1,0 +1,1 @@
+import{Ir as e,ai as t,zr as n}from"./index-CfvgJYEj.js";var r=Object.assign({name:`demo1`},{__name:`demo_1`,setup(r){return(r,i)=>(t(),n(`section`,null,[...i[0]||=[e(`h1`,null,`demo_1`,-1),e(`input`,null,null,-1)]]))}});export{r as default};

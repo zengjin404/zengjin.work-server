@@ -1,0 +1,1 @@
+import{Ir as e,Nr as t,ai as n,zr as r}from"./index-CfvgJYEj.js";var i=Object.assign({name:Math.random().toString(36).slice(2)},{__name:`level2page2`,setup(i){return(i,a)=>(n(),r(t,null,[a[0]||=e(`h1`,null,`level2page2.vue`,-1),a[1]||=e(`input`,null,null,-1)],64))}});export{i as default};

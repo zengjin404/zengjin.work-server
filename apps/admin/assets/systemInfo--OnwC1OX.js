@@ -1,1 +1,0 @@
-import{Ir as e,h as t,oi as n,zr as r}from"./index-UHAEZUgo.js";var i=t(Object.assign({name:Math.random().toString(36).slice(2)},{__name:`index`,setup(t){return(t,i)=>(n(),r(`section`,null,[...i[0]||=[e(`h1`,null,`系统状态`,-1)]]))}}),[[`__scopeId`,`data-v-b6874561`]]);export{i as default};

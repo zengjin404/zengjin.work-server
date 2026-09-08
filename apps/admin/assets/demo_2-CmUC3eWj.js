@@ -1,0 +1,1 @@
+import{Ai as e,Ir as t,ai as n,zr as r}from"./index-CfvgJYEj.js";var i={__name:`demo_2`,props:[`h1`],setup(i){let a=i;return(i,o)=>(n(),r(`section`,null,[t(`h1`,null,e(a.h1||`demo_2`),1),o[0]||=t(`input`,null,null,-1)]))}};export{i as default};

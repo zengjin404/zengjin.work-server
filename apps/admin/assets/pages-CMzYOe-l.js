@@ -1,1 +1,0 @@
-import{Ai as e,Ei as t,Ir as n,f as r,h as i,oi as a,p as o,zr as s}from"./index-UHAEZUgo.js";var c={class:`_panel`},l=i({__name:`index`,setup(i){let l=$config.title;return o(),r(),(r,i)=>(a(),s(`section`,c,[n(`h1`,null,e(t(l)),1)]))}},[[`__scopeId`,`data-v-ebe53909`]]);export{l as default};
