@@ -3,12 +3,15 @@ import base from '#api_util/base.js'
 import db from '#api_util/db.js'
 
 const actions = {
+	// 原公开查询 GET /api/share/info 已迁至 Worker 的 GET /share/info/:shareCode
+	// (Worker 为云分享唯一业务后端), 本模块现已无公开 GET 接口, get 仅保留分发占位
 	get: {},
 	post: {},
 }
 
 // shareCode 字符集: 去除易混淆的 0/o/1/l (保留 i)
 const CODE_CHARS = 'abcdefghijkmnpqrstuvwxyz23456789'
+// 站长后台分享生成 4 位; 用户自助分享由 Worker 生成 6 位 (双轨刻意设计, 勿统一)
 const CODE_LENGTH = 4
 
 // 分享服务 Worker 地址(非机密, 可在环境变量覆盖)
@@ -73,39 +76,6 @@ function norm_expiresAt(raw) {
 }
 
 /**
- * 公开: 按 shareCode 获取分享元信息 (无需登录)
- * 仅返回安全字段, 服务端二次校验 enabled + expiresAt, 不透传 driveItemId
- */
-actions.get.info = async ({ query }) => {
-	const shareCode = String(query.shareCode || '')
-		.trim()
-		.toLowerCase()
-	if (!shareCode || !new RegExp(`^[${CODE_CHARS}]{${CODE_LENGTH}}$`).test(shareCode)) {
-		return base.respFailure({ msg: '分享链接无效' })
-	}
-
-	const sql = `
-		SELECT "shareCode", "fileName", "mimeType", "fileSize", description, "createTime", "expiresAt"
-		FROM share
-		WHERE "shareCode" = $1
-			AND enabled = true
-			AND ("expiresAt" IS NULL OR "expiresAt" > to_char(now(), 'YYYY-MM-DD HH24:MI:SS'))
-		LIMIT 1
-	`
-	try {
-		const res = await db.query(sql, [shareCode])
-		if (!res.rowCount) {
-			return base.respFailure({ msg: '分享不存在或已失效' })
-		}
-		return base.respSuccess({
-			data: base.formatDbRows(res.rows)[0],
-		})
-	} catch (error) {
-		return base.respFailure({ msg: `获取分享信息失败：${error.message}` })
-	}
-}
-
-/**
  * 管理端: 分页查询分享列表 (关键字可搜文件名/分享码, 可按启用状态过滤)
  */
 actions.post.select = async ({ query, body }) => {
@@ -117,6 +87,9 @@ actions.post.select = async ({ query, body }) => {
 		enabledRaw === '' || enabledRaw == null || enabledRaw === 'undefined'
 			? null
 			: enabledRaw === true || enabledRaw === 'true' || enabledRaw === 1 || enabledRaw === '1'
+	// sourceType: 按来源过滤 (admin = 站长后台分享, user = 用户自助分享), 空串 = 全部
+	const sourceTypeRaw = String(params.sourceType || '').trim()
+	const sourceType = sourceTypeRaw === 'admin' || sourceTypeRaw === 'user' ? sourceTypeRaw : null
 	const page = Math.max(1, Number(params.page || params.current || 1))
 	const size = Math.min(100, Math.max(1, Number(params.size || params.pageSize || 10)))
 	const offset = (page - 1) * size
@@ -131,10 +104,15 @@ actions.post.select = async ({ query, body }) => {
 		binds.push(enabled)
 		where += ` AND enabled = $${binds.length}`
 	}
+	if (sourceType) {
+		binds.push(sourceType)
+		where += ` AND s."sourceType" = $${binds.length}`
+	}
 
 	const baseSelect = `
 		SELECT s.id, s."shareCode", s."fileName", s."mimeType", s."fileSize", s.enabled,
 			s.description, s."expiresAt", s."createTime", s."updateTime",
+			s."sourceType", s."uploadStatus", s."downloadCount",
 			bu.username AS "creatorName"
 		FROM share s
 		LEFT JOIN base_user bu ON bu.id = s."createdBy"
@@ -161,7 +139,7 @@ actions.post.select = async ({ query, body }) => {
 		// base_user 关联查询异常时降级为单表查询, 保证列表主流程可用
 		try {
 			let res = await db.query(
-				`SELECT id, "shareCode", "fileName", "mimeType", "fileSize", enabled, description, "expiresAt", "createTime", "updateTime" FROM share s ${where} ORDER BY "createTime" DESC LIMIT $${binds.length + 1} OFFSET $${binds.length + 2}`,
+				`SELECT id, "shareCode", "fileName", "mimeType", "fileSize", enabled, description, "expiresAt", "createTime", "updateTime", "sourceType", "uploadStatus", "downloadCount" FROM share s ${where} ORDER BY "createTime" DESC LIMIT $${binds.length + 1} OFFSET $${binds.length + 2}`,
 				[...binds, size, offset],
 			)
 			let rows = base.formatDbRows(res.rows)
@@ -340,12 +318,7 @@ export default async (req, resp) => {
 
 	const { method, action, query, body } = base.getReqInfo()
 
-	// 公开接口: GET /api/share/info
-	if (method === 'get' && action === 'info') {
-		return actions.get.info({ query })
-	}
-
-	// 其余接口全部要求管理员 (非 admin 返回 403)
+	// 全部接口均要求管理员 (非 admin 返回 403)
 	return requireAdmin(async () => {
 		const handler = actions[method]?.[action]
 		if (!handler) {
