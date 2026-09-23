@@ -37,8 +37,8 @@ const LOG_TABLE_DDL = `
     "target" varchar(100) NOT NULL,
     "status" smallint DEFAULT 0,
     "extra" jsonb DEFAULT '{}'::jsonb,
-    "insertTime" timestamptz DEFAULT now(),
-    "updateTime" timestamptz,
+    "insertTime" varchar(19),
+    "updateTime" varchar(19),
     PRIMARY KEY ("id")
   );
 `
