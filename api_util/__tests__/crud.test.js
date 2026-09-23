@@ -2,10 +2,10 @@
  * api_util/crud.js 单元测试
  *
  * 测试覆盖（全 Mock 模式）：
- *  - select:  分页查询 SQL 结构正确性、参数化查询
+ *  - select:  分页查询 SQL 结构正确性、参数化查询、保留字转义
  *  - detail:  单条查询、缺失 id 校验
- *  - insert:  新增记录、auto id、必填校验
- *  - update:  批量修改、缺失 id 校验
+ *  - insert:  新增记录、auto id、必填校验、保留字转义
+ *  - update:  批量修改、缺失 id 校验、保留字（如 desc）双引号安全转义
  *  - delete:  批量删除、缺失 id 校验
  *  - 错误处理：db.query 异常时的容错返回
  *
@@ -110,6 +110,21 @@ describe('crud.get.select', () => {
 		expect(binds[0]).toBe('%test%')
 	})
 
+	it('包含 Postgres 保留字列名（如 desc）时应安全转义为 "desc"', async () => {
+		mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 }).mockResolvedValueOnce({ rows: [{ total: '0' }] })
+
+		await crud.get.select({
+			table: 'base_app',
+			fields: ['title', 'desc'],
+			valids: [],
+			joins: [],
+			query: { page: 1, size: 10, desc: '测试描述' },
+		})
+
+		const dataSql = mockQuery.mock.calls[0][0]
+		expect(dataSql).toContain('base_app."desc" ilike $1')
+	})
+
 	it('db.query 异常时应返回失败而非抛出', async () => {
 		mockQuery.mockRejectedValueOnce(new Error('connection refused'))
 
@@ -209,6 +224,20 @@ describe('crud.post.insert', () => {
 		expect(binds[2]).toBe('内容') // content
 	})
 
+	it('包含 Postgres 保留字列名（如 desc）时应安全包裹双引号', async () => {
+		mockQuery.mockResolvedValueOnce({ rows: [{ id: 'test_id_123' }], rowCount: 1 })
+
+		await crud.post.insert({
+			table: 'base_app',
+			fields: ['id', 'title', 'desc'],
+			valids: ['title'],
+			body: { title: '测试', desc: '描述' },
+		})
+
+		const sql = mockQuery.mock.calls[0][0]
+		expect(sql).toContain('insert into base_app (id,title,"desc")')
+	})
+
 	it('db.query 异常时应返回失败', async () => {
 		mockQuery.mockRejectedValueOnce(new Error('duplicate key'))
 
@@ -273,6 +302,20 @@ describe('crud.post.update', () => {
 		expect(sql).toContain('$1')
 		expect(sql).toContain('$2')
 		expect(sql).toContain('$3')
+	})
+
+	it('更新包含 Postgres 保留字列名（如 desc）时应安全包裹双引号防语法错误', async () => {
+		mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 1 })
+
+		await crud.post.update({
+			table: 'base_app',
+			fields: ['title', 'desc', 'updatetime'],
+			valids: [],
+			body: { id: 'app123', desc: '设备与浏览器信息' },
+		})
+
+		const sql = mockQuery.mock.calls[0][0]
+		expect(sql).toContain('"desc" = $1')
 	})
 
 	it('批量更新：逗号分隔的多个 id', async () => {

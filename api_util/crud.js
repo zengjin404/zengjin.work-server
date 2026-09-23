@@ -1,6 +1,41 @@
 import base from './base.js'
 import db from './db.js'
 
+// Postgres 保留关键字清单，用作列名时必须转义为 "col" 规避语法错误（如 desc / user / order 等）
+const PG_RESERVED = new Set([
+	'all',
+	'any',
+	'asc',
+	'case',
+	'check',
+	'column',
+	'constraint',
+	'default',
+	'desc',
+	'else',
+	'end',
+	'foreign',
+	'from',
+	'group',
+	'key',
+	'limit',
+	'offset',
+	'order',
+	'primary',
+	'select',
+	'table',
+	'then',
+	'user',
+	'when',
+	'where',
+])
+
+function quoteCol(field) {
+	if (!field) return field
+	const raw = String(field).trim()
+	return PG_RESERVED.has(raw.toLowerCase()) || raw.startsWith('"') ? `"${raw.replace(/"/g, '')}"` : raw
+}
+
 const crud = {
 	get: {},
 	post: {},
@@ -24,7 +59,8 @@ crud.get.select = async options => {
 	fields.forEach((field, i) => {
 		let val = base.formatDbBind(query[field])
 		if (val) {
-			wheres.push(`${table}.${field} ilike $${bindIndex}`)
+			const col = quoteCol(field)
+			wheres.push(`${table}.${col} ilike $${bindIndex}`)
 			binds.push(`%${base.formatDbBind(query[field])}%`)
 			bindIndex++
 		}
@@ -36,7 +72,7 @@ crud.get.select = async options => {
 	if (joins?.length) {
 		joins.forEach((join, i) => {
 			const tb = join.table.split(' ').at(-1)
-			fieldStr += join.fields.map(field => `, ${tb}.${field} as ${tb}_${field}`).join('')
+			fieldStr += join.fields.map(field => `, ${tb}.${quoteCol(field)} as ${tb}_${field}`).join('')
 			joinStr += `left join ${join.table} on ${table}.${join.on} `
 		})
 	}
@@ -86,7 +122,7 @@ crud.get.detail = async options => {
 	if (joins?.length) {
 		joins.forEach((join, i) => {
 			const tb = join.table.split(' ').at(-1)
-			fieldStr += join.fields.map(field => `, ${tb}.${field} ${tb}_${field}`).join('')
+			fieldStr += join.fields.map(field => `, ${tb}.${quoteCol(field)} ${tb}_${field}`).join('')
 			joinStr += `left join ${join.table} on ${table}.${join.on} `
 		})
 	}
@@ -131,7 +167,8 @@ crud.post.insert = async options => {
 	})
 
 	try {
-		const res = await db.query(`insert into ${table} (${fields.join(',')}) values (${fields.map((_, i) => `$${i + 1}`).join(',')}) returning id`, binds)
+		const quotedCols = fields.map(quoteCol).join(',')
+		const res = await db.query(`insert into ${table} (${quotedCols}) values (${fields.map((_, i) => `$${i + 1}`).join(',')}) returning id`, binds)
 		if (res?.rowCount) {
 			return base.respSuccess({
 				msg: '新增成功',
@@ -164,7 +201,8 @@ crud.post.update = async options => {
 	const binds = []
 	fields.forEach(field => {
 		if (body[field] != null) {
-			updates.push(`${field} = $${updates.length + 1}`)
+			const col = quoteCol(field)
+			updates.push(`${col} = $${updates.length + 1}`)
 			binds.push(base.formatDbBind(body[field]))
 		}
 	})
