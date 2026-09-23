@@ -1,0 +1,1 @@
+import{Ai as e,Br as t,Ci as n,Di as r,_ as i,ii as a,si as o,ui as s}from"./index-C9AFzdeJ.js";var c=[`theme`],l={__name:`Stamp`,props:{theme:{type:String,default:`default`}},setup(l){let u=i(),d=l;return n(),a(()=>{}),(n,i)=>(o(),t(`div`,{class:`Stamp`,theme:r(u).theme,style:e(`color: var(--${d.theme})`)},[s(n.$slots,`default`)],12,c))}};export{l as t};

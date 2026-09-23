@@ -1,0 +1,1 @@
+import{Br as e,Lr as t,h as n,si as r}from"./index-C9AFzdeJ.js";var i=n(Object.assign({name:Math.random().toString(36).slice(2)},{__name:`index`,setup(n){return(n,i)=>(r(),e(`section`,null,[...i[0]||=[t(`h1`,null,`系统状态`,-1)]]))}}),[[`__scopeId`,`data-v-b6874561`]]);export{i as default};

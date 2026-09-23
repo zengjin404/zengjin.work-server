@@ -1,1 +1,0 @@
-import{Ir as e,ai as t,h as n,zr as r}from"./index-CfvgJYEj.js";var i={};function a(n,i){return t(),r(`section`,null,[...i[0]||=[e(`h1`,null,`demo_4-2-1`,-1),e(`input`,null,null,-1)]])}var o=n(i,[[`render`,a]]);export{o as default};

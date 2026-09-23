@@ -1,0 +1,1 @@
+import{Br as e,Lr as t,h as n,si as r}from"./index-C9AFzdeJ.js";var i={};function a(n,i){return r(),e(`section`,null,[...i[0]||=[t(`h1`,null,`demo_4-2-1`,-1),t(`input`,null,null,-1)]])}var o=n(i,[[`render`,a]]);export{o as default};

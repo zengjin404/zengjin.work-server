@@ -1,1 +1,0 @@
-import{Ai as e,Ei as t,Ir as n,ai as r,f as i,h as a,p as o,zr as s}from"./index-CfvgJYEj.js";var c={class:`_panel`},l=a({__name:`index`,setup(a){let l=$config.title;return o(),i(),(i,a)=>(r(),s(`section`,c,[n(`h1`,null,e(t(l)),1)]))}},[[`__scopeId`,`data-v-ebe53909`]]);export{l as default};
