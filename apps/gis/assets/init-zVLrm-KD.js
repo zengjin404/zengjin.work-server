@@ -1,1 +1,0 @@
-import{En as e,Jn as t}from"./index-DcgN0Wko.js";import{t as n}from"./MapMars3d-BUZA1peP.js";var r={__name:`init`,setup(r){return(r,i)=>(t(),e(n))}};export{r as default};

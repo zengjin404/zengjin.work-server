@@ -1,0 +1,1 @@
+import{Jn as e,On as t,Tn as n,dr as r,hr as i,i as a,r as o,u as s}from"./index-DtbeKmG1.js";var c={class:`_panel`},l=s({__name:`index`,setup(s){let l=$config.title;return a(),o(),(a,o)=>(e(),t(`section`,c,[n(`h1`,null,i(r(l)),1)]))}},[[`__scopeId`,`data-v-f615769c`]]);export{l as default};

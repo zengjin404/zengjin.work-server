@@ -1,0 +1,1 @@
+import{Gt as e,en as t,in as n,kt as r,rn as i}from"./index-DtbeKmG1.js";function a(e,t,a){for(var o=-1,s=t.length,c={};++o<s;){var l=t[o],u=i(e,l);a(u,l)&&r(c,n(l,e),u)}return c}function o(t,n){return a(t,n,function(n,r){return e(t,r)})}var s=t(function(e,t){return e==null?{}:o(e,t)});export{s as t};
