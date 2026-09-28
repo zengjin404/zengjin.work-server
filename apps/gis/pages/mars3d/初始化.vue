@@ -1,6 +1,6 @@
 <script setup>
-import Precode from '/src/components/Precode.vue'
 import Map from '/src/components/MapMars3d.vue'
+import Precode from '/src/components/Precode.vue'
 </script>
 
 <template>

@@ -1,0 +1,1 @@
+import{Dn as e}from"./index-DcgN0Wko.js";var t={__name:`加载模型`,setup(t){return(t,n)=>e(` <threed /> `)}};export{t as default};

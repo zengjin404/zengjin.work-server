@@ -1,1 +1,0 @@
-import{Jn as e,On as t,Tn as n,dr as r,hr as i,o as a,s as o,u as s}from"./index-BxyjNtm7.js";var c=s({__name:`index`,setup(s){let c=$config.title;return o(),a(),(a,o)=>(e(),t(`section`,null,[n(`h1`,null,i(r(c)),1)]))}},[[`__scopeId`,`data-v-bab642a3`]]);export{c as default};

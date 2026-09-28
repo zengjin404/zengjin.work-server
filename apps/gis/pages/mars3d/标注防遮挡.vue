@@ -1,7 +1,8 @@
 <script setup>
 import { reactive } from 'vue'
-import Precode from '/src/components/Precode.vue'
+
 import Map from '/src/components/MapMars3d.vue'
+import Precode from '/src/components/Precode.vue'
 
 //props属性===================================================================
 const props = defineProps({})

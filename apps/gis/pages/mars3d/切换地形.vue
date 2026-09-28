@@ -1,6 +1,6 @@
 <script setup>
-import Map from '/src/components/MapMars3d.vue'
 import MapCtrl_terrain from '/src/components/MapCtrlMars3d/MapCtrlMars3d_terrain.vue'
+import Map from '/src/components/MapMars3d.vue'
 
 //props属性===================================================================
 const props = defineProps({})
