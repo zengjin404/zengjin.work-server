@@ -161,14 +161,19 @@ crud.post.insert = async options => {
 		})
 	}
 
+	// 仅绑定 body 实际提供的字段，未提供的列交给数据库 DEFAULT / NULL 兜底。
+	// 不能把 undefined 绑成 ''——非文本列会直接报错，例如 base_app.updatetime (TIMESTAMPTZ)
+	// 报 invalid input syntax for type timestamp with time zone: ""
+	const cols = []
 	const binds = []
-	fields.forEach((field, i) => {
+	fields.forEach(field => {
+		if (body[field] == null) return
+		cols.push(quoteCol(field))
 		binds.push(base.formatDbBind(body[field]))
 	})
 
 	try {
-		const quotedCols = fields.map(quoteCol).join(',')
-		const res = await db.query(`insert into ${table} (${quotedCols}) values (${fields.map((_, i) => `$${i + 1}`).join(',')}) returning id`, binds)
+		const res = await db.query(`insert into ${table} (${cols.join(',')}) values (${cols.map((_, i) => `$${i + 1}`).join(',')}) returning id`, binds)
 		if (res?.rowCount) {
 			return base.respSuccess({
 				msg: '新增成功',

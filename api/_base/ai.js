@@ -63,38 +63,52 @@ async function ensure_dbInitialized_async() {
 	await db.query('ALTER TABLE base_ai ADD COLUMN IF NOT EXISTS "speed" INT NOT NULL DEFAULT 2')
 
 	// ---- 存量规范化迁移: 把模型行内联的 url/key/domain/provider 抽离进服务商表并回链 providerId (幂等可重放) ----
-	// 仅处理尚未回链的模型行; 旧 url/key 列 NOT NULL, 每行必有值, 按 (url,key) 分组必然覆盖全部存量行
-	const staleRes = await db.query('SELECT id, domain, provider, url, key FROM base_ai WHERE "providerId" IS NULL')
-	if (staleRes.rows.length > 0) {
-		const providerGroups = build_providerGroups(staleRes.rows)
-		const nowTime = base.getTime()
-		for (const g of providerGroups) {
-			const exist = await db.query('SELECT id FROM base_ai_provider WHERE url = $1 AND key = $2 LIMIT 1', [g.url, g.key])
-			let providerId
-			if (exist.rowCount > 0) {
-				providerId = exist.rows[0].id // 部分失败重跑时复用已建服务商
-			} else {
-				providerId = base.getId()
-				await db.query(
-					`
-					INSERT INTO base_ai_provider (id, name, domain, provider, url, key, "desc", status, sort, "createTime", "updateTime")
-					VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $10)
-				`,
-					[providerId, g.name, g.domain, g.provider, g.url, g.key, '', 1, 0, nowTime],
-				)
+	// 旧内联列会在下方收尾时被 DROP, 已清理的库再 SELECT 它们会直接报 column "domain" does not exist,
+	// 而 ensure 每次冷启动都要重跑, 故先探测旧列是否仍在, 再决定走完整迁移还是只补收尾
+	const legacyRes = await db.query(
+		`SELECT COUNT(*) FROM information_schema.columns
+		 WHERE table_schema = current_schema() AND table_name = 'base_ai'
+		   AND column_name IN ('domain', 'provider', 'url', 'key')`,
+	)
+	const legacyCount = parseInt(legacyRes.rows[0].count)
+
+	// 四列齐全才是未迁移的存量库; 仅处理尚未回链的模型行, 旧 url/key 列 NOT NULL 每行必有值, 按 (url,key) 分组必然覆盖全部存量行
+	if (legacyCount === 4) {
+		const staleRes = await db.query('SELECT id, domain, provider, url, key FROM base_ai WHERE "providerId" IS NULL')
+		if (staleRes.rows.length > 0) {
+			const providerGroups = build_providerGroups(staleRes.rows)
+			const nowTime = base.getTime()
+			for (const g of providerGroups) {
+				const exist = await db.query('SELECT id FROM base_ai_provider WHERE url = $1 AND key = $2 LIMIT 1', [g.url, g.key])
+				let providerId
+				if (exist.rowCount > 0) {
+					providerId = exist.rows[0].id // 部分失败重跑时复用已建服务商
+				} else {
+					providerId = base.getId()
+					await db.query(
+						`
+						INSERT INTO base_ai_provider (id, name, domain, provider, url, key, "desc", status, sort, "createTime", "updateTime")
+						VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $10)
+					`,
+						[providerId, g.name, g.domain, g.provider, g.url, g.key, '', 1, 0, nowTime],
+					)
+				}
+				await db.query('UPDATE base_ai SET "providerId" = $2, "updateTime" = $3 WHERE id = ANY($1::varchar[])', [g.ids, providerId, nowTime])
 			}
-			await db.query('UPDATE base_ai SET "providerId" = $2, "updateTime" = $3 WHERE id = ANY($1::varchar[])', [g.ids, providerId, nowTime])
 		}
 	}
 
 	// 守卫清理: 仅当全部模型行均已回链才收紧 NOT NULL 并删除旧列, 否则跳过等下轮冷启动幂等自愈 (绝不静默破坏数据)
-	const orphanRes = await db.query('SELECT COUNT(*) FROM base_ai WHERE "providerId" IS NULL')
-	if (parseInt(orphanRes.rows[0].count) === 0) {
-		await db.query('ALTER TABLE base_ai ALTER COLUMN "providerId" SET NOT NULL')
-		await db.query('ALTER TABLE base_ai DROP COLUMN IF EXISTS domain')
-		await db.query('ALTER TABLE base_ai DROP COLUMN IF EXISTS provider')
-		await db.query('ALTER TABLE base_ai DROP COLUMN IF EXISTS url')
-		await db.query('ALTER TABLE base_ai DROP COLUMN IF EXISTS "key"')
+	// legacyCount 为 1~3 说明上轮清理中断, 同样在这里补齐, 收敛到 0 后彻底跳过整段
+	if (legacyCount > 0) {
+		const orphanRes = await db.query('SELECT COUNT(*) FROM base_ai WHERE "providerId" IS NULL')
+		if (parseInt(orphanRes.rows[0].count) === 0) {
+			await db.query('ALTER TABLE base_ai ALTER COLUMN "providerId" SET NOT NULL')
+			await db.query('ALTER TABLE base_ai DROP COLUMN IF EXISTS domain')
+			await db.query('ALTER TABLE base_ai DROP COLUMN IF EXISTS provider')
+			await db.query('ALTER TABLE base_ai DROP COLUMN IF EXISTS url')
+			await db.query('ALTER TABLE base_ai DROP COLUMN IF EXISTS "key"')
+		}
 	}
 
 	// 创建会话表 (user_id 关联 base_user)

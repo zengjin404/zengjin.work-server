@@ -224,6 +224,26 @@ describe('crud.post.insert', () => {
 		expect(binds[2]).toBe('内容') // content
 	})
 
+	it('body 未提供的字段不应绑成空串（TIMESTAMPTZ 会报 invalid input syntax for type timestamp with time zone: ""）', async () => {
+		mockQuery.mockResolvedValueOnce({ rows: [{ id: 'test_id_123' }], rowCount: 1 })
+
+		await crud.post.insert({
+			table: 'base_app',
+			fields: ['id', 'title', 'status', 'sort', 'updatetime'],
+			valids: ['title'],
+			body: { title: '屏幕常亮', status: 1, sort: 0 },
+		})
+
+		const [sql, binds] = mockQuery.mock.calls[0]
+		// updatetime 未提供 → 不进列清单，交由数据库 NULL 兜底
+		expect(sql).toBe('insert into base_app (id,title,status,sort) values ($1,$2,$3,$4) returning id')
+		expect(typeof binds[0]).toBe('string')
+		expect(binds[0].length).toBeGreaterThan(0)
+		// 0 等假值不能被当作「未提供」跳过
+		expect(binds.slice(1)).toEqual(['屏幕常亮', '1', '0'])
+		expect(binds).not.toContain('')
+	})
+
 	it('包含 Postgres 保留字列名（如 desc）时应安全包裹双引号', async () => {
 		mockQuery.mockResolvedValueOnce({ rows: [{ id: 'test_id_123' }], rowCount: 1 })
 
