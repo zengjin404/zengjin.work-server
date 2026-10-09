@@ -1,8 +1,5 @@
 {
-	"zjs": [
-		[{ "name": "刘玉娇", "sex": 0, "work": "项目总监", "leader": true }],
-		[{ "name": "王永贞", "sex": 1, "work": "技术总监", "leader": true }]
-	],
+	"zjs": [[{ "name": "刘玉娇", "sex": 0, "work": "项目总监" }], [{ "name": "王永贞", "sex": 1, "work": "技术总监" }]],
 	"zcb": [
 		[
 			{ "name": "黄江伟", "sex": 1, "work": "通讯" },
