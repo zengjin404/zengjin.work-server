@@ -14,6 +14,7 @@ import docHandler from './_doc.js'
 import fcHandler from './_fc.js'
 import fileHandler from './_file.js'
 import firebaseHandler from './_firebase.js'
+import jndvHandler from './_jndv.js'
 import musicHandler from './_music.js'
 import noteHandler from './_note.js'
 import shareHandler from './_share.js'
@@ -89,6 +90,9 @@ export default async function masterHandler(req, res) {
 
 				case 'music':
 					return await musicHandler(req, res)
+
+				case 'jndv':
+					return await jndvHandler(req, res)
 
 				case 'zone':
 					const zoneName = fullAction[1] // 'mzl'

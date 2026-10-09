@@ -1,54 +1,58 @@
 {
 	"zjs": [
-		[{ "name": "刘玉娇", "sex": 0, "work": "项目总监", "leader": true }],
-		[{ "name": "王永贞", "sex": 1, "work": "技术总监", "leader": true }]
+		[{ "id": "zjs-c1-r1", "name": "刘玉娇", "sex": 0, "work": "项目总监", "leader": true }],
+		[{ "id": "zjs-c2-r1", "name": "王永贞", "sex": 1, "work": "技术总监", "leader": true }]
 	],
 	"zcb": [
 		[
-			{ "name": "黄江伟", "sex": 1, "work": "通讯" },
-			{ "name": "张新昌", "sex": 1, "work": "C++", "leader": true },
-			{ "name": "朱爱光", "sex": 1, "work": "C++" }
+			{ "id": "zcb-c1-r1", "name": "黄江伟", "sex": 1, "work": "通讯" },
+			{ "id": "zcb-c1-r2", "name": "张新昌", "sex": 1, "work": "C++", "leader": true },
+			{ "id": "zcb-c1-r3", "name": "朱爱光", "sex": 1, "work": "C++" }
 		],
 		[
-			{ "name": "于县芝", "sex": 1, "work": "JAVA" },
-			{ "name": "冯斌", "sex": 1, "work": "JAVA" },
-			{ "name": "武剑", "sex": 1, "work": "JAVA", "leader": true }
+			{ "id": "zcb-c2-r1", "name": "于县芝", "sex": 1, "work": "JAVA" },
+			{ "id": "zcb-c2-r2", "name": "冯斌", "sex": 1, "work": "JAVA" },
+			{ "id": "zcb-c2-r3", "name": "武剑", "sex": 1, "work": "JAVA", "leader": true }
 		],
 		[
-			{ "name": "王国栋", "sex": 1, "work": "安卓" },
-			{ "name": "陈青华", "sex": 1, "work": "JAVA" },
-			{ "name": "王凯", "sex": 1, "work": "JAVA" }
+			{ "id": "zcb-c3-r1", "name": "王国栋", "sex": 1, "work": "安卓" },
+			{ "id": "zcb-c3-r2", "name": "陈青华", "sex": 1, "work": "JAVA" },
+			{ "id": "zcb-c3-r3", "name": "王凯", "sex": 1, "work": "JAVA" }
 		],
-		[{ "name": "侯雨", "sex": 1, "work": "大数据" }, { "name": "赵小玮", "sex": 1, "work": "运维" }, {}]
+		[
+			{ "id": "zcb-c4-r1", "name": "侯雨", "sex": 1, "work": "大数据" },
+			{ "id": "zcb-c4-r2", "name": "赵小玮", "sex": 1, "work": "运维" },
+			{ "id": "zcb-c4-r3" }
+		]
 	],
 	"zfyy": [
 		[
-			{ "name": "石祥玲", "sex": 0, "work": "产品", "leader": true },
-			{ "name": "张震", "sex": 1, "work": "产品" },
-			{ "name": "范世草", "sex": 1, "work": "产品" },
-			{},
-			{ "name": "王长香", "sex": 0, "work": "测试" }
+			{ "id": "zfyy-c1-r1", "name": "石祥玲", "sex": 0, "work": "产品", "leader": true },
+			{ "id": "zfyy-c1-r2", "name": "张震", "sex": 1, "work": "产品" },
+			{ "id": "zfyy-c1-r3", "name": "范世草", "sex": 1, "work": "产品" },
+			{ "id": "zfyy-c1-r4" },
+			{ "id": "zfyy-c1-r5", "name": "王长香", "sex": 0, "work": "测试" }
 		],
 		[
-			{ "name": "李昌婷", "sex": 0, "work": "C#", "leader": true },
-			{ "name": "崔兴涛", "sex": 1, "work": "C#" },
-			{ "name": "蒋元", "sex": 1, "work": "前端" },
-			{ "name": "刘浩", "sex": 1, "work": "产品" },
-			{ "name": "姜博皓", "sex": 1, "work": "前端" }
+			{ "id": "zfyy-c2-r1", "name": "李昌婷", "sex": 0, "work": "C#", "leader": true },
+			{ "id": "zfyy-c2-r2", "name": "崔兴涛", "sex": 1, "work": "C#" },
+			{ "id": "zfyy-c2-r3", "name": "蒋元", "sex": 1, "work": "前端" },
+			{ "id": "zfyy-c2-r4", "name": "刘浩", "sex": 1, "work": "产品" },
+			{ "id": "zfyy-c2-r5", "name": "姜博皓", "sex": 1, "work": "前端" }
 		],
 		[
-			{ "name": "范文峰", "sex": 1, "work": "C#" },
-			{ "name": "李丽萍", "sex": 0, "work": "C#" },
-			{ "name": "尹德鹏", "sex": 1, "work": "前端" },
-			{ "name": "曾进", "sex": 1, "work": "前端", "leader": true },
-			{ "name": "张飞虎", "sex": 1, "work": "前端" }
+			{ "id": "zfyy-c3-r1", "name": "范文峰", "sex": 1, "work": "C#" },
+			{ "id": "zfyy-c3-r2", "name": "李丽萍", "sex": 0, "work": "C#" },
+			{ "id": "zfyy-c3-r3", "name": "尹德鹏", "sex": 1, "work": "前端" },
+			{ "id": "zfyy-c3-r4", "name": "曾进", "sex": 1, "work": "前端", "leader": true },
+			{ "id": "zfyy-c3-r5", "name": "张飞虎", "sex": 1, "work": "前端" }
 		],
 		[
-			{ "name": "彭杰", "sex": 1, "work": "UI" },
-			{ "name": "韩爱成", "sex": 1, "work": "产品" },
-			{ "name": "刘付刚", "sex": 1, "work": "前端" },
-			{ "name": "李峻韬", "sex": 1, "work": "前端" },
-			{ "name": "彭立涛", "sex": 1, "work": "PHP" }
+			{ "id": "zfyy-c4-r1", "name": "彭杰", "sex": 1, "work": "UI" },
+			{ "id": "zfyy-c4-r2", "name": "韩爱成", "sex": 1, "work": "产品" },
+			{ "id": "zfyy-c4-r3", "name": "刘付刚", "sex": 1, "work": "前端" },
+			{ "id": "zfyy-c4-r4", "name": "李峻韬", "sex": 1, "work": "前端" },
+			{ "id": "zfyy-c4-r5", "name": "彭立涛", "sex": 1, "work": "PHP" }
 		]
 	]
 }

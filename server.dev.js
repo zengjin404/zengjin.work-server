@@ -4,7 +4,7 @@ import express from 'express'
 import masterHandler from './api/index.js'
 
 const app = express()
-const PORT = 10001
+const PORT = process.env.PORT || 10001
 
 // 中间件：解析 JSON body 和 URL 编码 body
 app.use(express.json())
