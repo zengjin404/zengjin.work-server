@@ -59,6 +59,7 @@ async function ensure_dbInitialized_async() {
 			room        VARCHAR(20) NOT NULL,
 			seat_id     VARCHAR(40) NOT NULL UNIQUE,
 			name        VARCHAR(40) DEFAULT '',
+			pinyin      VARCHAR(60) DEFAULT '',
 			work        VARCHAR(40) DEFAULT '',
 			sex         SMALLINT DEFAULT 1,
 			leader      BOOLEAN DEFAULT false,
@@ -68,6 +69,8 @@ async function ensure_dbInitialized_async() {
 			updateby    VARCHAR(40) DEFAULT ''
 		);
 	`)
+	// 已有库不会走上面的 CREATE，补一列（幂等，可重复执行）
+	await db.query(`ALTER TABLE public.jndv_seat ADD COLUMN IF NOT EXISTS pinyin VARCHAR(60) DEFAULT ''`)
 	await db.query('CREATE INDEX IF NOT EXISTS idx_jndv_seat_room ON public.jndv_seat (room)')
 
 	// 幂等补齐种子数据：当表为空时全量导入
@@ -108,7 +111,7 @@ export default async function jndvHandler(req, resp) {
 			// 公开或半公开查询全部座位
 			const room = query.room
 			let sql = `
-				SELECT id, room, seat_id as "seatId", name, work, sex, leader, version,
+				SELECT id, room, seat_id as "seatId", name, pinyin, work, sex, leader, version,
 				       to_char(updatetime, 'YYYY-MM-DD HH24:MI:SS') as updatetime, updateby
 				FROM public.jndv_seat
 			`
@@ -144,6 +147,7 @@ export default async function jndvHandler(req, resp) {
 			const seatId = body.seatId || body.seat_id
 			const version = parseInt(body.version, 10)
 			const name = (body.name || '').trim()
+			const pinyin = (body.pinyin || '').trim()
 			const work = (body.work || '').trim()
 			const sex = body.sex === 0 || body.sex === '0' ? 0 : 1
 			const leader = Boolean(body.leader)
@@ -153,22 +157,23 @@ export default async function jndvHandler(req, resp) {
 				return base.respFailure({ msg: '缺少必填参数 seatId 或 version' })
 			}
 
-			// 乐观锁原子更新：WHERE seat_id = $6 AND version = $7
+			// 乐观锁原子更新：WHERE seat_id = $7 AND version = $8
 			const updateRes = await db.query(
 				`
 				UPDATE public.jndv_seat
 				SET name = $1,
-				    work = $2,
-				    sex = $3,
-				    leader = $4,
+				    pinyin = $2,
+				    work = $3,
+				    sex = $4,
+				    leader = $5,
 				    version = version + 1,
 				    updatetime = NOW(),
-				    updateby = $5
-				WHERE seat_id = $6 AND version = $7
-				RETURNING id, room, seat_id as "seatId", name, work, sex, leader, version,
+				    updateby = $6
+				WHERE seat_id = $7 AND version = $8
+				RETURNING id, room, seat_id as "seatId", name, pinyin, work, sex, leader, version,
 				          to_char(updatetime, 'YYYY-MM-DD HH24:MI:SS') as updatetime, updateby
 			`,
-				[name, work, sex, leader, username, seatId, version],
+				[name, pinyin, work, sex, leader, username, seatId, version],
 			)
 
 			if (updateRes.rowCount === 0) {
@@ -177,7 +182,7 @@ export default async function jndvHandler(req, resp) {
 				if ((checkExist.rowCount && checkExist.rowCount > 0) || (checkExist.rows && checkExist.rows.length > 0)) {
 					const curVer = checkExist.rows[0]?.version
 					return base.respFailure({
-						msg: '该座位已被他人修改，请刷新后重试',
+						msg: '该座位已被他人修改，再次保存将覆盖对方的内容',
 						currentVersion: curVer,
 					})
 				} else {

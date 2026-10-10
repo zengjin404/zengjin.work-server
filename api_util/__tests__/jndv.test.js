@@ -242,7 +242,7 @@ describe('jndv 业务模块单元测试', () => {
 			expect(mockStatus).toHaveBeenCalledWith(200)
 			const resData = mockJson.mock.calls[0][0]
 			expect(resData.code).toBe(-1)
-			expect(resData.msg).toContain('该座位已被他人修改，请刷新后重试')
+			expect(resData.msg).toContain('该座位已被他人修改，再次保存将覆盖对方的内容')
 		})
 
 		it('缺少必填字段 seatId 或 version 时，应当返回参数缺失错误', async () => {
