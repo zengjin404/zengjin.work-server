@@ -7,8 +7,10 @@
  *  - 鉴权门槛：  select/insert 等管理端操作在未登录时被 requireAuth 拒绝（401）
  *
  * 关键：所有数据查询均通过 mock 的 db.query，验证 SQL 使用 $n 参数化，不拼接用户数据。
- * 注意：app 模块持有模块级 dbInitialized 缓存，故每个用例用「查询串缓存破坏」重新 import，
- *       确保初始化逻辑（建表/种子）能按用例预期触发（Bun 的 vi 不支持 resetModules）。
+ * 注意：app 模块持有模块级 dbInitialized 缓存，故每个用例前 vi.resetModules() 重新加载；
+ *       db 单例由 global.dbPools 缓存，resetModules 后仍是同一个实例，运行时补丁持续生效。
+ *       （曾用「给 import 路径拼查询串」做缓存破坏，但 vite 分析不了变量拼接的说明符，
+ *       运行时报 Unknown variable dynamic import，已改为与 ai.test.js 同一套做法。）
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -26,12 +28,12 @@ beforeEach(() => {
 	mockQuery.mockReset()
 	// 每次把真实池实例的 query 替换为 spy（Pool.prototype.query 被实例属性遮蔽）
 	db.query = (...args) => mockQuery(...args)
+	vi.resetModules() // 重置 app 模块级 dbInitialized，使 ensure 每个用例都真实执行
 })
 
 // 重新导入一份全新的 app 模块（模块级 dbInitialized 状态随之重置），返回其 default handler
 async function load_app() {
-	const fresh = '?v=' + Date.now() + '-' + Math.random().toString(36).slice(2)
-	return (await import(`../../api/_base/app.js${fresh}`)).default
+	return (await import('../../api/_base/app.js')).default
 }
 
 // 构造一次 HTTP 调用，记录 resp.status 与 body（模块内部会自行注入 base.req/base.resp）

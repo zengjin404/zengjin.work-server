@@ -58,6 +58,44 @@ export async function checkAuth(req, resp) {
 }
 
 /**
+ * 非写入式认证：有 Token 就认一下，没有或无效都只是返回 null
+ *
+ * checkAuth 在未登录时会**自己写 401**，只适合「必须登录」的接口；像 jndv 问答门这种
+ * 「登录可选」（未登录答对同样放行）的场景不能用它 —— 会把正常的未登录访问写成一个错误响应。
+ * 所以这里只解 Token、绝不碰 resp，认出来就顺手挂到 req.user 上（与 checkAuth 保持同一形状）。
+ *
+ * @param {Object} req
+ * @returns {Promise<Object|null>} 认证成功返回 { userId, username }，否则 null
+ */
+export async function verifyAuth(req) {
+	req = req || base.req
+	try {
+		const authHeader = req?.headers?.authorization || req?.headers?.Authorization
+		if (!authHeader) return null
+
+		const parts = authHeader.split(' ')
+		if (parts.length !== 2 || parts[0] !== 'Bearer') return null
+
+		let decoded
+		try {
+			decoded = verifyAccessToken(parts[1])
+		} catch {
+			return null
+		}
+		if (!decoded?.userId) return null
+
+		req.user = {
+			userId: decoded.userId,
+			username: decoded.username,
+		}
+		return req.user
+	} catch (error) {
+		console.error('非写入式认证过程发生异常:', error)
+		return null
+	}
+}
+
+/**
  * 要求认证的中间件包装器
  * @param {Function} handler - 实际的处理函数
  * @returns {Function} 包装后的处理函数

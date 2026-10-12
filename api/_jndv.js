@@ -1,6 +1,16 @@
-import { checkAuth } from '#api_util/auth_middleware.js'
+import { checkAuth, verifyAuth } from '#api_util/auth_middleware.js'
 import base from '#api_util/base.js'
 import db from '#api_util/db.js'
+import {
+	allow_answer_attempt,
+	check_answer,
+	gate_public_info,
+	get_req_ip,
+	jndv_gate,
+	record_answer_failure,
+	sign_jndv_ticket,
+	verify_jndv_ticket,
+} from '#api_util/jndv_gate.js'
 
 let dbInitialized = false
 
@@ -73,6 +83,20 @@ async function ensure_dbInitialized_async() {
 	await db.query(`ALTER TABLE public.jndv_seat ADD COLUMN IF NOT EXISTS pinyin VARCHAR(60) DEFAULT ''`)
 	await db.query('CREATE INDEX IF NOT EXISTS idx_jndv_seat_room ON public.jndv_seat (room)')
 
+	// 问答门的「通过标记」表：只存「谁在哪个版本上通过了」，不存答案也不存题目
+	// （答案在 api_util/jndv_gate.js 里，是纯配置）。user_id 唯一约束同时也是
+	// 下面 ON CONFLICT (user_id) 的落点，少了它会直接报错。
+	await db.query(`
+		CREATE TABLE IF NOT EXISTS public.jndv_unlock (
+			id           VARCHAR(20) PRIMARY KEY,
+			user_id      VARCHAR(40) NOT NULL UNIQUE,
+			username     VARCHAR(40) DEFAULT '',
+			gate_version INT DEFAULT 1,
+			createtime   TIMESTAMPTZ DEFAULT NOW(),
+			updatetime   TIMESTAMPTZ DEFAULT NOW()
+		);
+	`)
+
 	// 幂等补齐种子数据：当表为空时全量导入
 	const countRes = await db.query('SELECT COUNT(*) FROM public.jndv_seat')
 	if (parseInt(countRes.rows[0].count, 10) === 0) {
@@ -91,6 +115,26 @@ async function ensure_dbInitialized_async() {
 	dbInitialized = true
 }
 
+/** 该账号是否在当前版本上通过过问答门（版本对不上就当没通过，改版即全员重答） */
+async function has_unlock_async(userId) {
+	const res = await db.query('SELECT gate_version FROM public.jndv_unlock WHERE user_id = $1', [userId])
+	const row = res?.rows?.[0]
+	if (!row) return false
+	return Number(row.gate_version) === jndv_gate.version
+}
+
+/** 记下「这个账号通过了」，同一账号重复通过只更新版本与时间，不新增行 */
+async function save_unlock_async(user) {
+	await db.query(
+		`
+		INSERT INTO public.jndv_unlock (id, user_id, username, gate_version, createtime, updatetime)
+		VALUES ($1, $2, $3, $4, NOW(), NOW())
+		ON CONFLICT (user_id) DO UPDATE SET username = $3, gate_version = $4, updatetime = NOW()
+	`,
+		[base.getId(), user.userId, user.username || '', jndv_gate.version],
+	)
+}
+
 export default async function jndvHandler(req, resp) {
 	base.req = req
 	base.resp = resp
@@ -105,6 +149,61 @@ export default async function jndvHandler(req, resp) {
 
 	try {
 		await ensure_dbInitialized_async()
+
+		// ---- 问答门：进门前的验证，登录可选 ----
+		if (method === 'get' && action === 'gate') {
+			// 有 Token 就顺便认一下：已登录用户不必再答一遍
+			const user = await verifyAuth(req)
+			const ticket = req.headers?.['x-jndv-pass'] || req.headers?.['X-Jndv-Pass'] || ''
+			const passed = verify_jndv_ticket(ticket) || (user?.userId ? await has_unlock_async(user.userId) : false)
+
+			return base.respSuccess({
+				msg: passed ? '已通过访问验证' : '需要回答访问验证问题',
+				data: {
+					passed,
+					// 已经通过的请求不再回题干与提示：没必要把问题条件反复发给已经进门的人
+					...(passed ? {} : gate_public_info()),
+				},
+			})
+		}
+
+		if (method === 'post' && action === 'gate') {
+			const ip = get_req_ip(req)
+			if (!allow_answer_attempt(ip)) {
+				return base.respFailure({ msg: '答错次数过多，请稍后再试' })
+			}
+
+			if (!check_answer(body.answer ?? body.name)) {
+				record_answer_failure(ip)
+				// 只说「不对」，不区分是哪一项不满足 —— 否则能用错误提示反推答案条件
+				return base.respFailure({ msg: '答案不对，再想想' })
+			}
+
+			const user = await verifyAuth(req)
+			if (user?.userId) await save_unlock_async(user)
+
+			return base.respSuccess({
+				msg: '验证通过',
+				data: {
+					passed: true,
+					version: jndv_gate.version,
+					// 无论登录与否都发凭证：登录用户退出登录后，本机仍凭它继续放行
+					ticket: sign_jndv_ticket(),
+					saved: Boolean(user?.userId),
+				},
+			})
+		}
+
+		if (method === 'post' && action === 'claim') {
+			// 这里用 verifyAuth 而非 checkAuth：未登录时要给出一句可读的失败原因，而不是被写成 401
+			const user = await verifyAuth(req)
+			if (!user?.userId) return base.respFailure({ msg: '未登录，无法把验证状态记到账号上' })
+			if (!verify_jndv_ticket(body.ticket)) {
+				return base.respFailure({ msg: '验证凭证已失效，请重新回答一次' })
+			}
+			await save_unlock_async(user)
+			return base.respSuccess({ msg: '验证状态已记录到账号', data: { passed: true, version: jndv_gate.version } })
+		}
 
 		// 路由分发
 		if (method === 'get' && (action === 'select' || action === 'list')) {

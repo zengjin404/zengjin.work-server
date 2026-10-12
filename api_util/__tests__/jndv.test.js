@@ -19,6 +19,14 @@ vi.mock('../auth_middleware.js', () => ({
 		resp.status(401).json({ code: -1, msg: '未登录或登录已过期，请重新登录' })
 		return false
 	}),
+	// 问答门走的是「登录可选」的非写入式认证：没有 Token 时返回 null，绝不自己写响应
+	verifyAuth: vi.fn(async req => {
+		if (req?.headers?.authorization?.includes('valid-token')) {
+			req.user = { userId: 'u123', username: 'tester_zengjin' }
+			return req.user
+		}
+		return null
+	}),
 }))
 
 const base = (await import('../base.js')).default
@@ -40,10 +48,12 @@ describe('jndv 业务模块单元测试', () => {
 
 	describe('GET /api/jndv/select - 座位数据查询', () => {
 		it('应能正确初始化表并查询全量座位，自动按房间聚合并带出所有必要字段', async () => {
-			// 1. mock 建表和 count 查询
-			mockQuery.mockResolvedValueOnce({ rows: [] }) // CREATE TABLE
+			// 1. mock 建表和 count 查询（顺序即 ensure_dbInitialized_async 里的执行顺序）
+			mockQuery.mockResolvedValueOnce({ rows: [] }) // CREATE TABLE jndv_seat
+			mockQuery.mockResolvedValueOnce({ rows: [] }) // ALTER TABLE 补 pinyin 列
 			mockQuery.mockResolvedValueOnce({ rows: [] }) // CREATE INDEX
-			mockQuery.mockResolvedValueOnce({ rows: [{ count: '34' }] }) // COUNT(*) > 0
+			mockQuery.mockResolvedValueOnce({ rows: [] }) // CREATE TABLE jndv_unlock
+			mockQuery.mockResolvedValueOnce({ rows: [{ count: '34' }] }) // COUNT(*) > 0，无需补种子
 
 			// 2. mock SELECT 查询全量座位
 			const fakeSeats = [
@@ -197,10 +207,11 @@ describe('jndv 业务模块单元测试', () => {
 
 			// 验证 UPDATE SQL 必须携带乐观锁版本号谓词与更新人
 			const updateCall = mockQuery.mock.calls[0]
-			expect(updateCall[0]).toContain('WHERE seat_id = $6 AND version = $7')
+			expect(updateCall[0]).toContain('WHERE seat_id = $7 AND version = $8')
 			expect(updateCall[0]).toContain('version = version + 1')
 			expect(updateCall[1]).toEqual([
 				'黄江伟(改)',
+				'', // 未传 pinyin 时写入空串
 				'架构师',
 				1,
 				true,
