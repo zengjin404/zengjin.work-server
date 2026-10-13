@@ -74,8 +74,8 @@ async function ensure_dbInitialized_async() {
 			sex         SMALLINT DEFAULT 1,
 			leader      BOOLEAN DEFAULT false,
 			version     INT DEFAULT 1,
-			createtime  TIMESTAMPTZ DEFAULT NOW(),
-			updatetime  TIMESTAMPTZ DEFAULT NOW(),
+			createtime  TIMESTAMP DEFAULT (now() AT TIME ZONE 'Asia/Shanghai'),
+			updatetime  TIMESTAMP DEFAULT (now() AT TIME ZONE 'Asia/Shanghai'),
 			updateby    VARCHAR(40) DEFAULT ''
 		);
 	`)
@@ -92,10 +92,55 @@ async function ensure_dbInitialized_async() {
 			user_id      VARCHAR(40) NOT NULL UNIQUE,
 			username     VARCHAR(40) DEFAULT '',
 			gate_version INT DEFAULT 1,
-			createtime   TIMESTAMPTZ DEFAULT NOW(),
-			updatetime   TIMESTAMPTZ DEFAULT NOW()
+			createtime   TIMESTAMP DEFAULT (now() AT TIME ZONE 'Asia/Shanghai'),
+			updatetime   TIMESTAMP DEFAULT (now() AT TIME ZONE 'Asia/Shanghai')
 		);
 	`)
+
+	// 存量库的时间列类型迁移（自带迁移，不需要手工执行 SQL）
+	//
+	// 定案（2026-10-13）：这两列一律「所见即所得」。原先两列是 TIMESTAMPTZ + NOW()：存进去的瞬间是对的，
+	// 但 timestamptz **不存显示用的字面值**，显示成什么完全取决于读它的客户端 —— to_char 按会话时区渲染
+	// （Supabase 会话是 UTC），Supabase 控制台的 Table Editor 也固定按 UTC 显示、且没有时区开关
+	// （官方仍只是 feature request）。结果就是直接查表会比北京时间少 8 小时、得心算，而这两处都在我们掌控之外。
+	//
+	// 改成无时区 TIMESTAMP 后，列里存的就是北京时间字面值，Studio / psql / 代码三处看到的一致。
+	// 之所以敢用无时区类型：Asia/Shanghai 恒为 +08:00 且无夏令时（pg_timezone_names 实测 utc_offset = 8h、
+	// is_dst = false；中国 1986–1991 实行过夏令时、1992 年起取消），墙上时间因此单调、不重复、不跳变
+	// —— 这正是 naive timestamp 唯一会出问题的场景，这里不存在。需要还原 UTC 瞬间时减 8 小时即可。
+	//
+	// ⚠️ USING 不能省：`ALTER COLUMN ... TYPE timestamp` 默认按**会话时区(UTC)** 解释，
+	// 会把存量数据整体改错 8 小时（08:18 变 00:18）。查 data_type 只是为了让迁移幂等、可重复执行。
+	//
+	// 表名进 SQL 只能拼字符串（PG 不支持标识符参数化，仓库里 crud.js 也是这么做的），
+	// 所以这里用「白名单 + 遍历」取代散落的两次调用：插值进来的值永远只能是下面这两个字面量，
+	// 将来有人想接外部输入会在第一行就被挡下（抛错而不是静默拼进 SQL）。
+	const TIME_COLUMN_TABLES = ['jndv_seat', 'jndv_unlock']
+	const migrate_time_column = async table => {
+		if (!TIME_COLUMN_TABLES.includes(table)) throw new Error(`时间列迁移不接受表名：${table}`)
+		const { rows } = await db.query(
+			`SELECT data_type FROM information_schema.columns
+			 WHERE table_schema = 'public' AND table_name = $1 AND column_name = 'updatetime'`,
+			[table],
+		)
+		if (rows[0]?.data_type === 'timestamp with time zone') {
+			await db.query(
+				`ALTER TABLE public.${table}
+					ALTER COLUMN createtime TYPE timestamp USING (createtime AT TIME ZONE 'Asia/Shanghai'),
+					ALTER COLUMN updatetime TYPE timestamp USING (updatetime AT TIME ZONE 'Asia/Shanghai')`,
+			)
+		}
+		// 改完类型还要单独钉一次默认值，这一步**不能**跟着上面的 if 走：
+		// 老库建表时是 TIMESTAMPTZ DEFAULT NOW()，ALTER TYPE 会把这个默认值原样带过来，而它落在无时区列上
+		// 会按**会话时区(UTC)**取墙上时间 —— 于是「没显式给时间列」的 INSERT 又会存成 UTC 字面值。
+		// 现在所有写入都显式给了 createtime / updatetime，所以这只是拆掉一颗哑弹，不动任何现有数据。
+		await db.query(
+			`ALTER TABLE public.${table}
+				ALTER COLUMN createtime SET DEFAULT (now() AT TIME ZONE 'Asia/Shanghai'),
+				ALTER COLUMN updatetime SET DEFAULT (now() AT TIME ZONE 'Asia/Shanghai')`,
+		)
+	}
+	for (const table of TIME_COLUMN_TABLES) await migrate_time_column(table)
 
 	// 幂等补齐种子数据：当表为空时全量导入
 	const countRes = await db.query('SELECT COUNT(*) FROM public.jndv_seat')
@@ -104,7 +149,7 @@ async function ensure_dbInitialized_async() {
 			await db.query(
 				`
 				INSERT INTO public.jndv_seat (id, room, seat_id, name, work, sex, leader, version, createtime, updatetime, updateby)
-				VALUES ($1, $2, $3, $4, $5, $6, $7, 1, NOW(), NOW(), 'system')
+				VALUES ($1, $2, $3, $4, $5, $6, $7, 1, (now() AT TIME ZONE 'Asia/Shanghai'), (now() AT TIME ZONE 'Asia/Shanghai'), 'system')
 				ON CONFLICT (seat_id) DO NOTHING
 			`,
 				[base.getId(), seat.room, seat.seat_id, seat.name, seat.work, seat.sex, seat.leader],
@@ -128,8 +173,8 @@ async function save_unlock_async(user) {
 	await db.query(
 		`
 		INSERT INTO public.jndv_unlock (id, user_id, username, gate_version, createtime, updatetime)
-		VALUES ($1, $2, $3, $4, NOW(), NOW())
-		ON CONFLICT (user_id) DO UPDATE SET username = $3, gate_version = $4, updatetime = NOW()
+		VALUES ($1, $2, $3, $4, (now() AT TIME ZONE 'Asia/Shanghai'), (now() AT TIME ZONE 'Asia/Shanghai'))
+		ON CONFLICT (user_id) DO UPDATE SET username = $3, gate_version = $4, updatetime = (now() AT TIME ZONE 'Asia/Shanghai')
 	`,
 		[base.getId(), user.userId, user.username || '', jndv_gate.version],
 	)
@@ -208,10 +253,25 @@ export default async function jndvHandler(req, resp) {
 		// 路由分发
 		if (method === 'get' && (action === 'select' || action === 'list')) {
 			// 公开或半公开查询全部座位
+			//
+			// 这里仍然走 to_char 输出字符串（而不是直接返回列值）：列是无时区 timestamp，
+			// 直出的话 node-postgres 会按**进程本地时区**把它解析成 JS Date，序列化后又变成 UTC 的 ISO 串，
+			// 等于绕一圈回到「看时间要心算」的老问题，而且服务端时区一换结果就变。to_char 出来就是字面值。
+			// 列现在存的本就是北京时间（见上面建表处的时区定案），所以不需要再 AT TIME ZONE。
+			// 「最后编辑人」优先展示昵称：jndv_seat 只存账户名（写入时取自 Token 的 username），
+			// 昵称在平台用户表 base_user 里，读的时候现查一次。兜底口径与仓库其他渲染层一致
+			// （api/_base/user.js:875 的注释）：nickname || username —— 昵称留空时原样显示账户名，
+			// 别让这一栏空着。昵称是随时可改的展示名，所以只在读侧解析、不落进 jndv_seat。
+			//
+			// 用 LIMIT 1 的相关子查询而不是 LEFT JOIN：base_user.username 上没有唯一索引
+			// （唯一索引只在 id 上），撞上重名会把座位行 join 成多行；顺带也免了给 FROM 里
+			// 的列逐个加前缀消歧义（id 在两张表里同名）。
 			const room = query.room
 			let sql = `
 				SELECT id, room, seat_id as "seatId", name, pinyin, work, sex, leader, version,
-				       to_char(updatetime, 'YYYY-MM-DD HH24:MI:SS') as updatetime, updateby
+				       to_char(updatetime, 'YYYY-MM-DD HH24:MI:SS') as updatetime,
+				       updateby,
+				       COALESCE(NULLIF(btrim((SELECT nickname FROM public.base_user WHERE username = jndv_seat.updateby LIMIT 1)), ''), updateby) as "updatebyName"
 				FROM public.jndv_seat
 			`
 			const params = []
@@ -223,10 +283,14 @@ export default async function jndvHandler(req, resp) {
 
 			const { rows } = await db.query(sql, params)
 
-			const rooms = {
-				zjs: rows.filter(r => r.room === 'zjs'),
-				zcb: rows.filter(r => r.room === 'zcb'),
-				zfyy: rows.filter(r => r.room === 'zfyy'),
+			// 房间分组按数据里实际出现的 room 动态聚合，不再硬编码房间名。
+			// 原先那份写死了 zjs/zcb/zfyy 三个，zhsq 漏在外面 —— 之所以没出事，
+			// 是因为前端 apps/jndv/data/seats.js 取不到 res.data.rooms[room] 时会退回 list.filter 兜底。
+			// 布局每新增一个房间就要改一次这里，不如直接按数据聚合，服务端本来也不需要认识房间清单。
+			const rooms = {}
+			for (const row of rows) {
+				if (!rooms[row.room]) rooms[row.room] = []
+				rooms[row.room].push(row)
 			}
 
 			return base.respSuccess({
@@ -245,6 +309,7 @@ export default async function jndvHandler(req, resp) {
 
 			const seatId = body.seatId || body.seat_id
 			const version = parseInt(body.version, 10)
+			const room = (body.room || '').trim()
 			const name = (body.name || '').trim()
 			const pinyin = (body.pinyin || '').trim()
 			const work = (body.work || '').trim()
@@ -255,43 +320,69 @@ export default async function jndvHandler(req, resp) {
 			if (!seatId || isNaN(version)) {
 				return base.respFailure({ msg: '缺少必填参数 seatId 或 version' })
 			}
+			// room 只在「这一格还没建过行」时用于 INSERT，所以它必须与 seatId 自洽（seatId 形如 zhsq-c3-r3）。
+			// 对不上就拒掉，免得建出 room 与格位不符的野行 —— 那种行 select 会当成另一个房间的座位返回
+			if (!room || !seatId.startsWith(`${room}-`)) {
+				return base.respFailure({ msg: '座位参数不合法：room 与 seatId 不一致' })
+			}
 
-			// 乐观锁原子更新：WHERE seat_id = $7 AND version = $8
+			// upsert + 乐观锁原子写入
+			//
+			// 为什么不是纯 UPDATE：「库里没有这一行」在业务上等于「这个格位还没有人坐过」，不是异常。
+			// 布局新增一个房间、或某个房间扩出一列/一行时，那些格位在库里天然没有行，
+			// 纯 UPDATE 会让它们永远存不进去（一路报「未找到指定座位」）。
+			// 之所以敢把「不存在」当新建：仓库没有删除接口 —— clear_seat 是把内容字段写回空值，
+			// 行本身始终留着（seat_id/version 是后续编辑的锚点）。所以「行不存在」只可能意味着「从没建过」，
+			// 不会把「刚被人删掉」误判成新建。
+			//
+			// 乐观锁靠 DO UPDATE 分支上的 WHERE 保住：
+			//   行不存在       → 走 INSERT，version 直接落 2
+			//   行在且版本相符 → 走 DO UPDATE，version + 1
+			//   行在但版本不符 → WHERE 不成立，不插也不写，rowCount = 0
+			// 新行为什么落 2 而不是 1：前端对没有库行的格位补的是 version = 1（见 apps/jndv/data/seats.js），
+			// 那把 1 已经被这次写入消耗掉了。若这里落 1，两个客户端同时首次写入时后到的那个
+			// 会撞上 `version = 1` 成立而被放行，前一份内容被无声覆盖 —— 正好是乐观锁要挡的事。
 			const updateRes = await db.query(
 				`
-				UPDATE public.jndv_seat
-				SET name = $1,
-				    pinyin = $2,
-				    work = $3,
-				    sex = $4,
-				    leader = $5,
-				    version = version + 1,
-				    updatetime = NOW(),
-				    updateby = $6
-				WHERE seat_id = $7 AND version = $8
+				INSERT INTO public.jndv_seat (id, room, seat_id, name, pinyin, work, sex, leader, version, createtime, updatetime, updateby)
+				VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 2, (now() AT TIME ZONE 'Asia/Shanghai'), (now() AT TIME ZONE 'Asia/Shanghai'), $9)
+				ON CONFLICT (seat_id) DO UPDATE
+				SET name = EXCLUDED.name,
+				    pinyin = EXCLUDED.pinyin,
+				    work = EXCLUDED.work,
+				    sex = EXCLUDED.sex,
+				    leader = EXCLUDED.leader,
+				    version = jndv_seat.version + 1,
+				    updatetime = (now() AT TIME ZONE 'Asia/Shanghai'),
+				    updateby = EXCLUDED.updateby
+				WHERE jndv_seat.version = $10
 				RETURNING id, room, seat_id as "seatId", name, pinyin, work, sex, leader, version,
 				          to_char(updatetime, 'YYYY-MM-DD HH24:MI:SS') as updatetime, updateby
 			`,
-				[name, pinyin, work, sex, leader, username, seatId, version],
+				[base.getId(), room, seatId, name, pinyin, work, sex, leader, username, version],
 			)
 
 			if (updateRes.rowCount === 0) {
-				// 检查是因为不存在还是版本冲突
+				// 行不存在的话上面必然插入成功，所以走到这里只可能是版本冲突。
+				// 回查一次是为了把当前版本号告诉前端（前端据此提示「重新加载后再改」）
 				const checkExist = await db.query('SELECT version FROM public.jndv_seat WHERE seat_id = $1', [seatId])
-				if ((checkExist.rowCount && checkExist.rowCount > 0) || (checkExist.rows && checkExist.rows.length > 0)) {
-					const curVer = checkExist.rows[0]?.version
-					return base.respFailure({
-						msg: '该座位已被他人修改，再次保存将覆盖对方的内容',
-						currentVersion: curVer,
-					})
-				} else {
-					return base.respFailure({ msg: '未找到指定座位' })
-				}
+				return base.respFailure({
+					msg: '该座位已被他人修改，再次保存将覆盖对方的内容',
+					currentVersion: checkExist.rows?.[0]?.version,
+				})
 			}
+
+			// 保存后弹窗里的「最后修改」要当场换成操作者的昵称，所以顺手带上：
+			// 前端 handle_saved 会把整个 data 合并回本地座位对象，少了它就得等下次刷新才显示昵称。
+			// 这里用 id 精确命中（Token 里带的就是 base_user.id，主键唯一），
+			// 比再拿 username 查一次可靠 —— username 上没有唯一索引。
+			// 查不到（账号已删）或昵称为空都退回账户名，与 select 侧同一口径。
+			const nicknameRes = await db.query('SELECT nickname FROM public.base_user WHERE id = $1 LIMIT 1', [req.user.userId])
+			const updatebyName = String(nicknameRes?.rows?.[0]?.nickname || '').trim() || updateRes.rows[0].updateby
 
 			return base.respSuccess({
 				msg: '保存成功',
-				data: updateRes.rows[0],
+				data: { ...updateRes.rows[0], updatebyName },
 			})
 		}
 

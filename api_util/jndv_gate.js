@@ -13,12 +13,13 @@ import jwt from 'jsonwebtoken'
  */
 export const jndv_gate = {
 	version: 1,
-	// 高亮用 **…** 标记，前端拆成 <strong> 渲染（不经 v-html）
-	question: '请写出任意一位 **入职时间** 在 2021 年 12 月 31 日（含）之前、**目前仍在职**、属于 **研发中心** 的同事姓名。',
+	// 题面直接带 HTML（<strong> 高亮 / <small> 括注 / <br /> 断行）：它由 gate_public_info() 原样下发，
+	// 前端 apps/jndv/components/GateMask.vue 用 v-html 渲染，前端不再做任何拆解 —— 改这行要连着看那边的样式
+	question: `请写出任意一位 <strong>2021 年</strong><strong>之前入职</strong><small>（含）</small>、<br />当前 <strong>在职</strong>、属于 <strong>研发中心</strong> 的同事姓名。`,
 	// 已确认穷尽：符合「2021 年 12 月 31 日（含）之前入职 + 当前在职 + 研发中心」的人就这 8 位。
 	// 将来有增减，除了改这里，必须把 version 一并加一。
 	answers: ['王永贞', '刘玉娇', '李昌婷', '石祥玲', '曾进', '王长香', '黄江伟', '冯斌'],
-	hint: '填一位同事的姓名即可',
+	hint: '填写一位同事姓名即可',
 	// 凭证有效期（天）：够长，员工换设备/清缓存后不至于反复重答
 	ticketDays: 180,
 }
