@@ -1,0 +1,1 @@
+import{At as e,Wt as t,a as n,in as r,qt as i}from"./index-C-Osv4HM.js";var a=n({__name:`Table`,props:{width:{type:String,default:`max-content`}},setup(n){let a=n;return(n,o)=>(t(),e(`div`,{class:`Table`,style:r({"--width":a.width})},[i(n.$slots,`default`,{},void 0,!0)],4))}},[[`__scopeId`,`data-v-2c4297e5`]]);export{a as t};
