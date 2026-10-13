@@ -1,1 +1,0 @@
-import{At as e,Gt as t,Jt as n,a as r,an as i}from"./index-Dz6dnxtw.js";var a=r({__name:`Table`,props:{width:{type:String,default:`max-content`}},setup(r){let a=r;return(r,o)=>(t(),e(`div`,{class:`Table`,style:i({"--width":a.width})},[n(r.$slots,`default`,{},void 0,!0)],4))}},[[`__scopeId`,`data-v-375287d4`]]);export{a as t};
