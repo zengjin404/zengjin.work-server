@@ -1,5 +1,6 @@
 <script setup>
-import Chart from 'chart.js/auto';
+import Chart from 'chart.js/auto'
+
 import BaseChart from '/src/components/BaseChart.vue'
 
 const props = defineProps(['data'])
@@ -16,19 +17,20 @@ function init_chart() {
 		options: {
 			plugins: {
 				legend: {
-					display: false // 隐藏图例
-				}
-			}
+					display: false, // 隐藏图例
+				},
+			},
 		},
 		data: {
 			labels: props.data?.map(item => item.year),
-			datasets: [{
-				data: props.data?.map(item => item.value),
-			}]
+			datasets: [
+				{
+					data: props.data?.map(item => item.value),
+				},
+			],
 		},
-	});
+	})
 }
-
 </script>
 <template>
 	<BaseChart canvas ref="chartRef" />

@@ -1,0 +1,1 @@
+import{Kr as e,Ui as t,Yr as n,a as r,d as i,gi as a,ha as o,i as s}from"./index-CzybLgTJ.js";var c={class:`_panel`},l=i({__name:`index`,setup(i){let l=$config.title;return r(),s(),(r,i)=>(a(),n(`section`,c,[e(`h1`,null,o(t(l)),1)]))}},[[`__scopeId`,`data-v-f615769c`]]);export{l as default};

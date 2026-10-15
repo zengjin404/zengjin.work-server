@@ -1,5 +1,6 @@
 <script setup>
-import HuiCharts from '@opentiny/huicharts';
+import HuiCharts from '@opentiny/huicharts'
+
 import BaseChart from '/src/components/BaseChart.vue'
 
 const props = defineProps(['data'])
@@ -21,7 +22,7 @@ function init_chart() {
 			dimensions: ['year', 'value'],
 			source: props.data,
 		},
-		series: [{ type: 'line' }]
+		series: [{ type: 'line' }],
 	})
 	chart.render()
 }
@@ -32,11 +33,11 @@ function init_chart2() {
 	chart.init(chartRef.value?.$el)
 	chart.setSimpleOption('LineChart', {
 		legend: {
-			show: false
+			show: false,
 		},
 		data: props.data,
 	})
-	chart.render();
+	chart.render()
 }
 </script>
 <template>

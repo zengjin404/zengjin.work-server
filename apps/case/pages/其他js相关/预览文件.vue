@@ -1,9 +1,8 @@
 <script setup>
 // import Logs from '/src/components/Logs.vue'
 import Precode from '/src/components/Precode.vue'
-import base from '/src/js/base.js'
-
 import DialogModel from '/src/components/model/DialogModel.vue'
+import base from '/src/js/base.js'
 
 //初始化===================================================================
 const state = reactive({

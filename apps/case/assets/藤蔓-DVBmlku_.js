@@ -1,1 +1,0 @@
-import{Fi as e,Ii as t,Kr as n,Yr as r,gi as i,m as a,pi as o}from"./index-B93fTNeR.js";var s=a({__name:`藤蔓`,setup(a){return e({}),t(),o(()=>{}),(e,t)=>(i(),r(`section`,null,[...t[0]||=[n(`iframe`,{src:`/$apps/case/动画效果/藤蔓/`},null,-1)]]))}},[[`__scopeId`,`data-v-5128f2e0`]]);export{s as default};

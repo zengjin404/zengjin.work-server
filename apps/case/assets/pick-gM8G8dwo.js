@@ -1,1 +1,0 @@
-import{Nn as e,Zn as t,dr as n,hr as r,mr as i}from"./index-B93fTNeR.js";function a(t,n,a){for(var o=-1,s=n.length,c={};++o<s;){var l=n[o],u=i(t,l);a(u,l)&&e(c,r(l,t),u)}return c}function o(e,n){return a(e,n,function(n,r){return t(e,r)})}var s=n(function(e,t){return e==null?{}:o(e,t)});export{s as t};

@@ -1,1 +1,0 @@
-import{Kr as e,Ui as t,Yr as n,gi as r,ha as i,l as a,m as o,u as s}from"./index-B93fTNeR.js";var c=o({__name:`index`,setup(o){let c=$config.title;return s(),a(),(a,o)=>(r(),n(`section`,null,[e(`h1`,null,i(t(c)),1)]))}},[[`__scopeId`,`data-v-bab642a3`]]);export{c as default};

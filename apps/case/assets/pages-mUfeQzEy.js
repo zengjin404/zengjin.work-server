@@ -1,0 +1,1 @@
+import{gi as e,qr as t}from"./index-CzybLgTJ.js";import n from"./pages-DLaw7-W3.js";var r={__name:`index`,setup(r){return(r,i)=>(e(),t(n))}};export{r as default};

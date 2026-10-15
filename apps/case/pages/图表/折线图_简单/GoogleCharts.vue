@@ -9,20 +9,15 @@ onMounted(() => {
 })
 
 function init_chart() {
-	let chart = new google.visualization.LineChart(chartRef.value?.$el);
-	let data = google.visualization.arrayToDataTable([
-		['x', 'y'],
-		...props.data?.map(item => [item.year, item.value])
-	]);
+	let chart = new google.visualization.LineChart(chartRef.value?.$el)
+	let data = google.visualization.arrayToDataTable([['x', 'y'], ...props.data?.map(item => [item.year, item.value])])
 	let options = {
 		legend: {
-			position: 'none' // 隐藏图例
-		}
-	};
-	chart.draw(data, options);
+			position: 'none', // 隐藏图例
+		},
+	}
+	chart.draw(data, options)
 }
-
-
 </script>
 <template>
 	<BaseChart ref="chartRef" />

@@ -1,5 +1,6 @@
 <script setup>
 import * as Echarts from 'echarts'
+
 import BaseChart from '/src/components/BaseChart.vue'
 
 const props = defineProps(['data'])
@@ -39,7 +40,7 @@ function init_chart2() {
 			dimensions: ['year', 'value'],
 			source: props.data,
 		},
-		series: [{ type: 'line' }]
+		series: [{ type: 'line' }],
 	})
 }
 </script>

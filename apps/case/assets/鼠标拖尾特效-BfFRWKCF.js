@@ -1,0 +1,1 @@
+import{Fi as e,Ii as t,Kr as n,Yr as r,d as i,gi as a,pi as o}from"./index-CzybLgTJ.js";var s=i({__name:`鼠标拖尾特效`,setup(i){return e({}),t(),o(()=>{}),(e,t)=>(a(),r(`section`,null,[...t[0]||=[n(`iframe`,{src:`/$apps/case/交互效果/鼠标拖尾特效/`},null,-1)]]))}},[[`__scopeId`,`data-v-2df355ea`]]);export{s as default};

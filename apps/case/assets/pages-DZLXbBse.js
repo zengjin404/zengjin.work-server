@@ -1,1 +1,0 @@
-import{gi as e,qr as t}from"./index-B93fTNeR.js";import n from"./pages-_MReoqjL.js";var r={__name:`index`,setup(r){return(r,i)=>(e(),t(n))}};export{r as default};

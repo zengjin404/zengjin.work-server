@@ -1,1 +1,0 @@
-import{Fi as e,Ii as t,Kr as n,Yr as r,gi as i,m as a,pi as o}from"./index-B93fTNeR.js";var s=a({__name:`水面真实`,setup(a){return e({}),t(),o(()=>{}),(e,t)=>(i(),r(`section`,null,[...t[0]||=[n(`iframe`,{src:`/$apps/case/动画效果/水面真实/`},null,-1)]]))}},[[`__scopeId`,`data-v-685158f2`]]);export{s as default};

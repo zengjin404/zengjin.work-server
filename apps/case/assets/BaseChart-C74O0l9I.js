@@ -1,0 +1,1 @@
+import{Yr as e,d as t,gi as n,yi as r}from"./index-CzybLgTJ.js";var i={key:0,class:`BaseChart`},a={key:1,class:`BaseChart`},o=t({__name:`BaseChart`,props:{canvas:{type:Boolean,default:!1}},setup(t){let o=t;return(t,s)=>o.canvas?(n(),e(`canvas`,i)):(n(),e(`div`,a,[r(t.$slots,`default`,{},void 0,!0)]))}},[[`__scopeId`,`data-v-a23ab97f`]]);export{o as t};

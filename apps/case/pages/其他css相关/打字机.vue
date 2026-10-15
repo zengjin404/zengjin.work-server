@@ -4,8 +4,6 @@ import base from '/src/js/base.js'
 
 //初始化===================================================================
 const state = reactive({})
-
-
 </script>
 
 <template>
@@ -17,21 +15,15 @@ const state = reactive({})
 
 <style lang="less" scoped>
 section {
-
 	p {
 		font-size: 22px;
 		width: 18em;
 		white-space: nowrap;
 		overflow: hidden;
 		animation:
-			typing 4s steps(18)
-			/* 执行typing动画，在4s内执行完毕，分18段执行 */
-			,
-			caret 0.5s steps(1) 10
-			/* 执行typing动画，在0.5s内执行完毕，分1段执行，循环执行10次 */
-		;
+			typing 4s steps(18) /* 执行typing动画，在4s内执行完毕，分18段执行 */,
+			caret 0.5s steps(1) 10 /* 执行typing动画，在0.5s内执行完毕，分1段执行，循环执行10次 */;
 		border-right: 1px solid transparent;
-
 
 		@keyframes typing {
 			from {
@@ -41,7 +33,7 @@ section {
 
 		@keyframes caret {
 			50% {
-				border-right-color: var(--cl);
+				border-right-color: var(--tc);
 			}
 		}
 	}

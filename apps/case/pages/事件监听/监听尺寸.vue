@@ -41,12 +41,9 @@ function change_size(width, height) {
 				<!-- 有动效时中间过程也触发, 无动效时仅最终状态触发 -->
 				<t-checkbox v-model="state.transition" style="font-size: 0.85rem">动效</t-checkbox>
 				<t-divider dashed />
-				<t-button size="small" variant="outline" @click="change_size(base.getRandom(100, 500))"> 改变宽度
-				</t-button>
-				<t-button size="small" variant="outline" @click="change_size(null, base.getRandom(50, 300))"> 改变高度
-				</t-button>
-				<t-button size="small" variant="outline"
-					@click="change_size(base.getRandom(100, 500), base.getRandom(50, 300))"> 同时改变宽高 </t-button>
+				<t-button size="small" variant="outline" @click="change_size(base.getRandom(100, 500))"> 改变宽度 </t-button>
+				<t-button size="small" variant="outline" @click="change_size(null, base.getRandom(50, 300))"> 改变高度 </t-button>
+				<t-button size="small" variant="outline" @click="change_size(base.getRandom(100, 500), base.getRandom(50, 300))"> 同时改变宽高 </t-button>
 				<t-divider dashed />
 				<t-tag size="small" variant="outline" disabled>拖拽右下角手柄可手动触发</t-tag>
 			</t-space>

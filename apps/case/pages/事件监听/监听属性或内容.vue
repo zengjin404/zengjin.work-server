@@ -1,10 +1,12 @@
 <script setup>
-import { MessagePlugin } from 'tdesign-vue-next'
 import dayjs from 'dayjs'
+import { MessagePlugin } from 'tdesign-vue-next'
+
+import { nextTick } from 'vue'
+
 import Logs from '/src/components/Logs.vue'
 import Precode from '/src/components/Precode.vue'
 import base from '/src/js/base.js'
-import { nextTick } from 'vue'
 
 const boxRef = ref()
 
@@ -36,14 +38,16 @@ function mutationObserver_todo(mutations) {
 			log += `属性名：${item.attributeName}`
 		}
 		if (item.type === 'childList') {
-			log += `增加项：${Array.from(item.addedNodes)
+			log += `增加项：${
+				Array.from(item.addedNodes)
 					.map(item => item.nodeName)
 					.join(',') || '无'
-				}　`
-			log += `删除项：${Array.from(item.removedNodes)
+			}　`
+			log += `删除项：${
+				Array.from(item.removedNodes)
 					.map(item => item.nodeName)
 					.join(',') || '无'
-				}`
+			}`
 		}
 		state.logs.push(log)
 	})

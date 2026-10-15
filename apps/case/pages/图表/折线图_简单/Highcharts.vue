@@ -1,6 +1,7 @@
 <script setup>
 import Highcharts from 'highcharts'
 import 'highcharts/modules/exporting'
+
 import BaseChart from '/src/components/BaseChart.vue'
 
 const props = defineProps(['data'])
@@ -18,12 +19,14 @@ function init_chart() {
 			categories: props.data?.map(item => item.year),
 		},
 		yAxis: {
-			title: false
+			title: false,
 		},
-		series: [{
-			data: props.data?.map(item => item.value),
-		}]
-	});
+		series: [
+			{
+				data: props.data?.map(item => item.value),
+			},
+		],
+	})
 }
 </script>
 <template>

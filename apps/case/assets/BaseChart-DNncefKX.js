@@ -1,1 +1,0 @@
-import{Yr as e,gi as t,m as n,yi as r}from"./index-B93fTNeR.js";var i={key:0,class:`BaseChart`},a={key:1,class:`BaseChart`},o=n({__name:`BaseChart`,props:{canvas:{type:Boolean,default:!1}},setup(n){let o=n;return(n,s)=>o.canvas?(t(),e(`canvas`,i)):(t(),e(`div`,a,[r(n.$slots,`default`,{},void 0,!0)]))}},[[`__scopeId`,`data-v-5ad87b90`]]);export{o as t};
