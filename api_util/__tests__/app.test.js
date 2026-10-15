@@ -55,8 +55,13 @@ async function call_api(appHandler, url, method, headers = {}, body = {}, query 
 // 生成管理员访问令牌（vitest 已注入 JWT_SECRET）
 const admin_token = () => `Bearer ${generateAccessToken({ userId: 'admin001', username: 'admin' })}`
 
+// 种子条数：必须与 api/_base/app.js 的 presets.length 保持一致
+// ensure 只在 COUNT(*) < presets.length 时补种，用例靠这个数决定是否走补种分支；
+// 数量对不上会让补种 INSERT 抢占后续 mock 队列，表现为「首页查询莫名失败」
+const PRESET_COUNT = 32
+
 // 默认 mock：ensure 阶段 6 个查询 (建表/索引/image迁移/category扩容/老数据刷正/计数)
-function mock_ensure(count = '31') {
+function mock_ensure(count = String(PRESET_COUNT)) {
 	mockQuery
 		.mockResolvedValueOnce({ rows: [], rowCount: 0 }) // CREATE TABLE
 		.mockResolvedValueOnce({ rows: [], rowCount: 0 }) // CREATE INDEX
@@ -73,7 +78,7 @@ beforeEach(() => {
 describe('app.get.home — 首页公开列表', () => {
 	it('仅返回 show=true 且 status=1 的应用，并按 featured/sort 排序', async () => {
 		const appHandler = await load_app()
-		mock_ensure('31')
+		mock_ensure()
 		mockQuery.mockResolvedValueOnce({
 			rows: [
 				{ name: 'ai', title: 'Zen AI 对话', featured: 1, sort: 10 },
@@ -106,7 +111,7 @@ describe('app.get.home — 首页公开列表', () => {
 
 		// 6 次 ensure 查询 (建表/索引/image迁移/category扩容/老分类迁移/计数) 之后的所有调用都是 INSERT
 		const insertCalls = mockQuery.mock.calls.slice(6)
-		expect(insertCalls.length).toBeGreaterThanOrEqual(31)
+		expect(insertCalls.length).toBeGreaterThanOrEqual(PRESET_COUNT)
 		const insertSql = insertCalls[0][0]
 		expect(insertSql).toContain('INSERT INTO base_app')
 		expect(insertSql).toContain('ON CONFLICT (name) DO NOTHING')
@@ -120,7 +125,7 @@ describe('app.get.home — 首页公开列表', () => {
 	it('home 查询异常时返回失败而非抛出', async () => {
 		const appHandler = await load_app()
 		// 建表/种子正常，但首页列表查询本身失败
-		mock_ensure('31')
+		mock_ensure()
 		mockQuery.mockRejectedValueOnce(new Error('connection refused'))
 
 		const res = await call_api(appHandler, '/api/base/app/home', 'GET')
@@ -133,7 +138,7 @@ describe('app.get.home — 首页公开列表', () => {
 describe('app 管理端操作 — 未登录拦截', () => {
 	it('select 无 token 应被 requireAuth 拒绝（401 未提供认证令牌）', async () => {
 		const appHandler = await load_app()
-		mock_ensure('31')
+		mock_ensure()
 		mockQuery.mockResolvedValue({ rows: [], rowCount: 0 })
 
 		const res = await call_api(appHandler, '/api/base/app/select', 'GET', {})
@@ -147,7 +152,7 @@ describe('app 管理端操作 — 未登录拦截', () => {
 
 	it('insert 无 token 应被 requireAuth 拒绝（401）', async () => {
 		const appHandler = await load_app()
-		mock_ensure('31')
+		mock_ensure()
 		mockQuery.mockResolvedValue({ rows: [], rowCount: 0 })
 
 		const res = await call_api(appHandler, '/api/base/app/insert', 'POST', {})
@@ -159,7 +164,7 @@ describe('app 管理端操作 — 未登录拦截', () => {
 
 	it('无 token 访问公开 home 仍可正常放行', async () => {
 		const appHandler = await load_app()
-		mock_ensure('31')
+		mock_ensure()
 		mockQuery.mockResolvedValueOnce({ rows: [{ name: 'ai' }], rowCount: 1 })
 
 		const res = await call_api(appHandler, '/api/base/app/home', 'GET', {})
@@ -174,7 +179,7 @@ describe('app 管理端操作 — 登录后 CRUD', () => {
 
 	it('insert: fields 必须包含 id 且首绑定为新生成主键', async () => {
 		const appHandler = await load_app()
-		mock_ensure('31')
+		mock_ensure()
 		mockQuery.mockResolvedValueOnce({ rows: [{ id: 'newid' }], rowCount: 1 })
 
 		const res = await call_api(
@@ -201,7 +206,7 @@ describe('app 管理端操作 — 登录后 CRUD', () => {
 
 	it('update: 仅更新 body 中提供的字段，按 id 定位', async () => {
 		const appHandler = await load_app()
-		mock_ensure('31')
+		mock_ensure()
 		mockQuery.mockResolvedValueOnce({ rows: [{ id: 'app001' }], rowCount: 1 })
 
 		const res = await call_api(appHandler, '/api/base/app/update', 'POST', { Authorization: token }, { id: 'app001', title: '改名后的应用' })
@@ -224,7 +229,7 @@ describe('app 管理端操作 — 登录后 CRUD', () => {
 
 	it('delete: 按 id 物理删除', async () => {
 		const appHandler = await load_app()
-		mock_ensure('31')
+		mock_ensure()
 		mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 1 })
 
 		const res = await call_api(appHandler, '/api/base/app/delete', 'POST', { Authorization: token }, { id: 'app001' })
