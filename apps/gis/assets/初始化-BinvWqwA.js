@@ -1,1 +1,0 @@
-import{En as e,Jn as t}from"./index-DtbeKmG1.js";import{t as n}from"./MapAmap-BU1cu4wc.js";var r={__name:`初始化`,setup(r){return(r,i)=>(t(),e(n))}};export{r as default};
