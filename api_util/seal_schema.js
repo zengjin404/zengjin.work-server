@@ -78,7 +78,7 @@ const CONFIG_SPEC = {
 	color: COLOR,
 
 	preview: {
-		background: ENUM('checkerboard', 'white'),
+		background: ENUM('checkerboard', 'white', 'paper'),
 		showGuides: BOOL,
 	},
 
@@ -125,6 +125,7 @@ const CONFIG_SPEC = {
 		fontSize: NUM(6, 80),
 		letterSpacing: NUM(-5, 30),
 		scaleX: NUM(0.4, 2.5),
+		scaleY: NUM(0.4, 2.5),
 		offsetX: NUM(-80, 80),
 		offsetY: NUM(-80, 80),
 	}),

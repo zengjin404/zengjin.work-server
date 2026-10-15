@@ -111,7 +111,7 @@ function make_config() {
 			offsetX: 0,
 			offsetY: 60,
 		},
-		centerText: { visible: false, text: '', fontFamily: font, fontWeight: 400, fontSize: 40, letterSpacing: 0, scaleX: 1, offsetX: 0, offsetY: 0 },
+		centerText: { visible: false, text: '', fontFamily: font, fontWeight: 400, fontSize: 40, letterSpacing: 0, scaleX: 1, scaleY: 1, offsetX: 0, offsetY: 0 },
 		centerSymbol: { visible: true, mode: 'star', customChar: '', fontFamily: font, size: 60, fontWeight: 400, offsetX: 0, offsetY: 0 },
 		borders: {
 			outer: { visible: true, color: '#C83232', width: 4, inset: 6, dashed: false, segments: 60, gapRatio: 3 },
