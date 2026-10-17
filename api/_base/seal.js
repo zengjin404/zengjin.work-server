@@ -5,8 +5,8 @@ import { SealPayloadError, sanitize_export_payload } from '#api_util/seal_schema
 
 // 印章生成器的导出留痕 (base_seal_export_log)
 //
-// 前端只在「登录用户点击下载无标识原图」时调用 post.record, 服务端写库成功才允许
-// 浏览器栅格化 clean 版本 —— 顺序即约束: 没有记录, 就没有无标识原图。
+// 前端只在「登录用户点击下载无水印原图」时调用 post.record, 服务端写库成功才允许
+// 浏览器栅格化 clean 版本 —— 顺序即约束: 没有记录, 就没有无水印原图。
 //
 // 这个模块刻意只做三件事, 别的都不做:
 //   1. 归属只认会话: user_id 取自 verifyAccessToken 解出的 req.user.userId。
@@ -112,7 +112,7 @@ async function insert_record_async(userId, payload) {
 const actions = { post: {} }
 
 /**
- * 记录一次无标识导出请求（登录用户）
+ * 记录一次无水印导出请求（登录用户）
  *
  * 失败一律 HTTP 200 + code:-1: 仓库既有约定(base.respFailure), 只有认证中间件才写真实 401。
  * msg 只描述「这件事为什么没成」, 不含 SQL、堆栈或任何表结构细节。
