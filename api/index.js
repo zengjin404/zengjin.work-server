@@ -12,6 +12,7 @@ import userHandler from './_base/user.js'
 import wsdemoHandler from './_base/wsdemo.js'
 import demoHandler from './_demo.js'
 import docHandler from './_doc.js'
+import dphxbHandler from './_dphxb.js'
 import fcHandler from './_fc.js'
 import fileHandler from './_file.js'
 import firebaseHandler from './_firebase.js'
@@ -81,6 +82,9 @@ export default async function masterHandler(req, res) {
 
 				case 'doc':
 					return await docHandler(req, res)
+
+				case 'dphxb':
+					return await dphxbHandler(req, res)
 
 				case 'fc':
 					return await fcHandler(req, res)
