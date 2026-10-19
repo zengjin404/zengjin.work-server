@@ -58,7 +58,7 @@ const admin_token = () => `Bearer ${generateAccessToken({ userId: 'admin001', us
 // 种子条数：必须与 api/_base/app.js 的 presets.length 保持一致
 // ensure 只在 COUNT(*) < presets.length 时补种，用例靠这个数决定是否走补种分支；
 // 数量对不上会让补种 INSERT 抢占后续 mock 队列，表现为「首页查询莫名失败」
-const PRESET_COUNT = 32
+const PRESET_COUNT = 33
 
 // 默认 mock：ensure 阶段 6 个查询 (建表/索引/image迁移/category扩容/老数据刷正/计数)
 function mock_ensure(count = String(PRESET_COUNT)) {

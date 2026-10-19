@@ -7,7 +7,7 @@
 	},
 	"scripts": {
 		"serve": "node .env.copy.js && node --env-file=.env server.dev.js",
-		"vercel-serve": "node .env.copy.js && vercel dev --local-config vercel.json --listen 0.0.0.0:1232",
+		"vercel-serve": "node .env.copy.js && vercel dev --local-config vercel.json --listen 0.0.0.0:10001",
 		"preview": "node ./vite.preview.js",
 		"test": "vitest run",
 		"test:watch": "vitest",

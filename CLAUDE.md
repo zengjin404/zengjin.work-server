@@ -4,7 +4,7 @@
 
 - 测试：`bun test` / `bun test:watch`
 - 格式：`bun format:check` / `bun format`
-- 本地调试：`bun serve` (端口 1232)
+- 本地调试：`bun serve`（端口见 `../zengjin.work-source/docs/_deployment.md`）
 
 ## 架构与编码规范
 
@@ -19,6 +19,9 @@
 
 ## 专项文档指引（需要时按需查阅）
 
+- 文档治理 / AI 协作边界 / 文档事实变更日志 → `../zengjin.work-source/docs/_doc_guide.md` / `_ai.md` / `_doc_changelog.md`
+- 跨仓契约 / 字段口径 / 隐性契约 → `../zengjin.work-source/docs/_contracts.md`
+- 验证方法 / 敏感数据脱敏 → `../zengjin.work-source/docs/_verification.md`
 - API 架构总览 → `../zengjin.work-source/docs/_api.md`
 - 通用 CRUD 引擎 → `../zengjin.work-source/docs/_crud.md`
 - 数据库架构 / 双库 / 连接池 → `../zengjin.work-source/docs/_database.md`
@@ -28,5 +31,14 @@
 
 ## 文档维护规则
 
-- 代码重构、新增功能、修补重要 Bug 后，必须同步更新对应的专项文档（`docs/*.md`）、`README.md` 或 `CLAUDE.md`。
-- `CLAUDE.md` 保持精简（控制在 60 行内），只保留最核心命令与规范；详细架构移步 `CLAUDE.md` 或 `docs/` 专项文档。
+- 文档治理、证据规范、保留策略、收尾清单 → `../zengjin.work-source/docs/_doc_guide.md`；AI 可写/必问/禁止 → `../zengjin.work-source/docs/_ai.md`。
+- 代码重构、新增功能、修补重要 Bug 后，必须同步更新对应专项文档、`README.md` 或 `CLAUDE.md`，并在 `../zengjin.work-source/docs/_doc_changelog.md` 记录文档事实变更。
+- `CLAUDE.md` 软预算 ≤80 行且 ≤6,000 字符，只保留核心命令、硬约束和指针。
+- 归档隔离：`../zengjin.work-source/docs/归档/` 仅供人工查阅历史资料，禁止作为当前事实依据。
+
+## 仓库协约
+
+- 包管理器：Bun；`bun.lock` 纳入版本控制，变更依赖时同步提交。
+- 质量门禁：GitHub Actions 执行 `bun install` + `bun format:check` + `bun test`，不执行 build。
+- 生产部署：由 Vercel 负责构建；CI 不产出构建产物。
+- 提交前至少运行 `bun format:check`；行为变更需补测试。

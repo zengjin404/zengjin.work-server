@@ -190,7 +190,7 @@ function getLocalIP() {
 }
 
 /**
- * 从 package.json 的 scripts.serve 中解析端口；失败则回退到环境变量或 1232
+ * 从 package.json 的 scripts.serve 中解析端口；失败则回退到环境变量或 10001
  * @returns {string}
  */
 function getPortFromPackageJson() {
@@ -199,5 +199,5 @@ function getPortFromPackageJson() {
 		const portMatch = serveScript.match(/--listen\s+[0-9.]+:(\d+)/)
 		if (portMatch && portMatch[1]) return portMatch[1]
 	} catch {}
-	return process.env.PORT || '1232'
+	return process.env.PORT || '10001'
 }
