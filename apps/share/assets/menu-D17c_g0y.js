@@ -1,5 +1,1 @@
-<<<<<<<< HEAD:apps/share/assets/menu-D17c_g0y.js
 import{n as e,t}from"./index-g0orn8bE.js";var n=$config.app,r=t(`_menu`,{state:()=>({menus:[],tabs:[],tabI:0,topId:``}),persist:{key:`${n}/_menu`,storage:sessionStorage},actions:{async init_menus(t,n){return new Promise(async(r,i)=>{try{console.time(`init_menus`);let i=await addDynamicRoutes(t),a=[...n.menusStatic,...i].map(t=>(t.meta.id=t.meta?.id||e(),t));this.menus=a,this.topId=a.find(e=>e.meta?.showInMenu!=0)?.meta?.id||``,console.timeEnd(`init_menus`),r()}catch(e){i(e)}})}}});export{r as use_menu};
-========
-import{n as e,t}from"./index-DVfu3krD.js";var n=$config.app,r=t(`_menu`,{state:()=>({menus:[],tabs:[],tabI:0,topId:``}),persist:{key:`${n}/_menu`,storage:sessionStorage},actions:{async init_menus(t,n){return new Promise(async(r,i)=>{try{console.time(`init_menus`);let i=await addDynamicRoutes(t),a=[...n.menusStatic,...i].map(t=>(t.meta.id=t.meta?.id||e(),t));this.menus=a,this.topId=a.find(e=>e.meta?.showInMenu!=0)?.meta?.id||``,console.timeEnd(`init_menus`),r()}catch(e){i(e)}})}}});export{r as use_menu};
->>>>>>>> 9fd3fd9a18c9e6c3d5f479a3b38f673bb1fb50fd:apps/share/assets/menu-BR5MMYQD.js
