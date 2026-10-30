@@ -146,7 +146,22 @@ const presets = [
 	['flex', 'Flex 布局演示', 'flex, css, 弹性盒', 'Flex 布局可视化演示', 'fa-regular fa-layer-group', '#00897b', 'dev', '', 0, '', 1, true, 220],
 	['key2', '按键检测', '按键, 键盘, keydown', '按键码实时检测', 'fa-regular fa-keyboard', '#7e57c2', 'dev,daily', '', 0, '', 1, true, 230],
 	['llq', '设备信息', '设备, 硬件, navigator', '设备与浏览器信息', 'fa-regular fa-laptop', '#00acc1', 'dev,daily', '', 0, '', 1, true, 240],
-	['camera', '摄像头采集', '摄像头, 相机, 采集, 人脸', '摄像头采集与截图', 'fa-regular fa-camera', '#fb8c00', 'media,daily', '', 0, '', 1, true, 250],
+	['cameracapture', '摄像头采集', '摄像头, 相机, 采集, 人脸', '摄像头采集与截图', 'fa-regular fa-camera', '#fb8c00', 'media,daily', '', 0, '', 1, true, 250],
+	[
+		'camera',
+		'摄像头调试器',
+		'摄像头, 相机, 麦克风, 调试, 分辨率, 帧率',
+		'摄像头与麦克风综合调试, 分辨率测试与检测报告',
+		'fa-regular fa-camera-retro',
+		'#0052d9',
+		'media,dev',
+		'',
+		0,
+		'',
+		1,
+		true,
+		255,
+	],
 	['gis', 'GIS 综合应用', 'gis, 地图, 地理', 'GIS 综合应用集', 'fa-regular fa-earth-asia', '#43a047', 'gis,dev', '', 0, '', 1, true, 260],
 	['mars3d', 'Mars3D 实例', '三维, 3d, 地球, cesium', 'Mars3D 三维地球实例', 'fa-regular fa-globe', '#f4511e', 'gis,dev', '', 0, '', 1, true, 270],
 	['threed', '3D 模型', '3d模型, three, 三维', '3D 模型在线预览', 'fa-regular fa-cube', '#5e35b1', 'gis,media', '', 0, '', 1, true, 280],
@@ -213,6 +228,24 @@ async function ensure_dbInitialized_async() {
 			ELSE category
 		END
 		WHERE category IN ('ai', 'tool', 'office', 'map', 'frame', 'demo')
+	`)
+
+	// 幂等迁移：旧「摄像头采集」应用由 camera 更名为 cameracapture，把 camera 让位给新的摄像头调试器
+	// 仅在 cameracapture 尚不存在且旧行仍是原名字/标题时执行，避免覆盖 admin 的手工调整
+	await db.query(`
+		UPDATE base_app SET
+			id = 'cameracapture',
+			name = 'cameracapture',
+			title = '摄像头采集',
+			alias = '摄像头, 相机, 采集, 人脸',
+			"desc" = '摄像头采集与截图',
+			icon = 'fa-regular fa-camera',
+			icon_color = '#fb8c00',
+			category = 'media,daily',
+			sort = 250
+		WHERE name = 'camera'
+			AND title = '摄像头采集'
+			AND NOT EXISTS (SELECT 1 FROM base_app WHERE name = 'cameracapture')
 	`)
 
 	// 幂等补齐种子：仅当行数不足时补插缺失 name（不覆盖已存在行，不干扰 admin 上/下架调整）
