@@ -1,5 +1,5 @@
 window.$config = {
 	...window.$config,
 	app: 'color',
-	title: '配色板',
+	title: '色彩工具箱',
 }
