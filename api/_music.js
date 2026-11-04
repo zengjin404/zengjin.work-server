@@ -76,21 +76,22 @@ const actions = {
 			const whereStr = wheres.length ? `WHERE ${wheres.join(' AND ')}` : ''
 
 			// 排序处理：默认为发布日期降序 (releaseDate DESC)，支持按名称排序 (title ASC)
-			let orderBy = '"releaseDate" DESC, "createTime" DESC'
+			let orderBy = '"releaseDate" DESC NULLS LAST, "createTime" DESC'
 			if (query.sort === 'az') {
 				orderBy = '"title" ASC'
 			} else if (query.sort === 'new') {
-				orderBy = '"releaseDate" DESC, "createTime" DESC'
+				orderBy = '"releaseDate" DESC NULLS LAST, "createTime" DESC'
 			}
 
 			try {
 				const countRes = await db.query(`SELECT COUNT(*) FROM "${table}" ${whereStr}`, binds)
 				const total = parseInt(countRes.rows[0]?.count || 0)
 
-				const listRes = await db.query(
-					`SELECT * FROM "${table}" ${whereStr} ORDER BY ${orderBy} LIMIT $${idx} OFFSET $${idx + 1}`,
-					[...binds, pageSize, offset],
-				)
+				const listRes = await db.query(`SELECT * FROM "${table}" ${whereStr} ORDER BY ${orderBy} LIMIT $${idx} OFFSET $${idx + 1}`, [
+					...binds,
+					pageSize,
+					offset,
+				])
 
 				const data = base.formatDbRows(listRes.rows)
 				return base.respSuccess({ data, total })
@@ -145,20 +146,7 @@ const actions = {
 						"id", "title", "coverUrl", "audioUrl", "duration", "releaseDate",
 						"lyric", "lyricType", "isFavorite", "status", "createTime", "createtime"
 					) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
-					[
-						id,
-						title,
-						coverUrl,
-						audioUrl,
-						duration,
-						releaseDate,
-						lyric,
-						lyricType,
-						isFavorite,
-						status,
-						now,
-						now,
-					],
+					[id, title, coverUrl, audioUrl, duration, releaseDate, lyric, lyricType, isFavorite, status, now, now],
 				)
 				return base.respSuccess({ msg: '新增成功', data: id })
 			} catch (error) {
@@ -203,20 +191,7 @@ const actions = {
 						"updateTime" = $10,
 						"updatetime" = $11
 					WHERE "id" = $12 AND "deleteTime" IS NULL RETURNING "id"`,
-					[
-						title,
-						coverUrl,
-						audioUrl,
-						duration,
-						releaseDate,
-						lyric,
-						lyricType,
-						isFavorite,
-						status,
-						now,
-						now,
-						body.id,
-					],
+					[title, coverUrl, audioUrl, duration, releaseDate, lyric, lyricType, isFavorite, status, now, now, body.id],
 				)
 				if (!res.rowCount) return base.respFailure({ msg: '歌曲不存在或已删除' })
 				return base.respSuccess({ msg: '更新成功', data: body.id })
@@ -234,10 +209,7 @@ const actions = {
 			const deleteTime = base.getTime()
 
 			try {
-				const res = await db.query(`UPDATE "${table}" SET "deleteTime" = $1 WHERE id = ANY($2::text[])`, [
-					deleteTime,
-					ids,
-				])
+				const res = await db.query(`UPDATE "${table}" SET "deleteTime" = $1 WHERE id = ANY($2::text[])`, [deleteTime, ids])
 				return base.respSuccess({ msg: '删除成功', data: ids.join(',') })
 			} catch (error) {
 				return base.respFailure({ msg: `删除失败: ${error.message}` })
@@ -252,10 +224,7 @@ const actions = {
 
 			try {
 				const isFav = body.isFavorite === true || body.isFavorite === 'true'
-				const res = await db.query(
-					`UPDATE "${table}" SET "isFavorite" = $1 WHERE id = $2 AND "deleteTime" IS NULL RETURNING *`,
-					[isFav, body.id],
-				)
+				const res = await db.query(`UPDATE "${table}" SET "isFavorite" = $1 WHERE id = $2 AND "deleteTime" IS NULL RETURNING *`, [isFav, body.id])
 				if (!res.rowCount) return base.respFailure({ msg: '歌曲不存在' })
 
 				return base.respSuccess({
@@ -275,10 +244,7 @@ const actions = {
 
 			try {
 				const status = body.status === true || body.status === 'true'
-				const res = await db.query(
-					`UPDATE "${table}" SET "status" = $1 WHERE id = $2 AND "deleteTime" IS NULL RETURNING *`,
-					[status, body.id],
-				)
+				const res = await db.query(`UPDATE "${table}" SET "status" = $1 WHERE id = $2 AND "deleteTime" IS NULL RETURNING *`, [status, body.id])
 				if (!res.rowCount) return base.respFailure({ msg: '歌曲不存在' })
 
 				return base.respSuccess({
@@ -306,5 +272,3 @@ export default async function (req, resp) {
 		return base.respFailure({ msg: `服务器内部错误: ${error.message}` })
 	}
 }
-
-
