@@ -206,9 +206,12 @@ actions.post.insert = async ({ body }) => {
 	for (let i = 0; i < 10; i++) {
 		const shareCode = gen_shareCode()
 		try {
+			// sourceType / uploadStatus 必须显式写: 表默认值是 'user' / 'pending'(方案 B 两阶段直传的初始态),
+			// 而后台这条链路是「分享 OneDrive 里已存在的文件」—— 没有待上传过程, 漏写就永远停在
+			// pending, 公开页按 Worker 的门禁映射成「文件上传中」, 分享等于发出去就是坏的
 			await db.query(
-				`INSERT INTO share (id, "shareCode", "driveItemId", "fileName", "mimeType", "fileSize", enabled, "expiresAt", "createdBy", description, "createTime", "updateTime")
-				 VALUES ($1, $2, $3, $4, $5, $6, true, $7, $8, $9, $10, $10)`,
+				`INSERT INTO share (id, "shareCode", "driveItemId", "fileName", "mimeType", "fileSize", enabled, "expiresAt", "createdBy", description, "createTime", "updateTime", "sourceType", "uploadStatus")
+				 VALUES ($1, $2, $3, $4, $5, $6, true, $7, $8, $9, $10, $10, 'admin', 'completed')`,
 				[
 					id,
 					shareCode,
