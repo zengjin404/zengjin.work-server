@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 510 510">
+  <rect x="0" y="0" width="510" height="510" rx="115" fill="currentColor" />
+  <g transform="translate(66.3, 66.3) scale(0.74)"
+     fill="none"
+     stroke="#fff"
+     stroke-linecap="round"
+     stroke-linejoin="round"
+     stroke-width="50">
+    <polygon points="255 15 15 135 255 255 495 135 255 15" style="transition: 0.3s"/>
+    <polyline points="495 135 255 495 15 375 135 195" style="transition: 0.3s"/>
+    <polyline points="375 315 495 375 255 495" style="transition: 0.3s"/>
+  </g>
+</svg>
