@@ -58,9 +58,9 @@ const admin_token = () => `Bearer ${generateAccessToken({ userId: 'admin001', us
 // 种子条数：必须与 api/_base/app.js 的 presets.length 保持一致
 // ensure 只在 COUNT(*) < presets.length 时补种，用例靠这个数决定是否走补种分支；
 // 数量对不上会让补种 INSERT 抢占后续 mock 队列，表现为「首页查询莫名失败」
-const PRESET_COUNT = 33
+const PRESET_COUNT = 36
 
-// 默认 mock：ensure 阶段 6 个查询 (建表/索引/image迁移/category扩容/老数据刷正/计数)
+// 默认 mock：ensure 阶段 8 个查询 (建表/索引/image迁移/category扩容/老数据刷正/camera 更名/计数/认知图卡显式注册)
 function mock_ensure(count = String(PRESET_COUNT)) {
 	mockQuery
 		.mockResolvedValueOnce({ rows: [], rowCount: 0 }) // CREATE TABLE
@@ -68,7 +68,9 @@ function mock_ensure(count = String(PRESET_COUNT)) {
 		.mockResolvedValueOnce({ rows: [], rowCount: 0 }) // ALTER TABLE (image 列迁移)
 		.mockResolvedValueOnce({ rows: [], rowCount: 0 }) // ALTER TABLE (category 列扩容)
 		.mockResolvedValueOnce({ rows: [], rowCount: 0 }) // UPDATE (老分类迁移)
+		.mockResolvedValueOnce({ rows: [], rowCount: 0 }) // UPDATE (camera 更名 cameracapture)
 		.mockResolvedValueOnce({ rows: [{ count }] }) // SELECT COUNT
+		.mockResolvedValueOnce({ rows: [], rowCount: 0 }) // INSERT cards 应用（显式幂等注册）
 }
 
 beforeEach(() => {
@@ -94,7 +96,7 @@ describe('app.get.home — 首页公开列表', () => {
 		expect(res.json.data).toHaveLength(2)
 
 		// 校验过滤与排序 SQL（过滤条件写死在 SQL 层，不拼接用户输入）
-		const homeSql = mockQuery.mock.calls[6][0]
+		const homeSql = mockQuery.mock.calls[8][0]
 		expect(homeSql).toContain('WHERE show = true AND status = 1')
 		expect(homeSql).toContain('ORDER BY featured DESC, sort ASC, createtime ASC')
 		// 封面图字段必须随列表返回（大卡封面 / 图标降级共用）
@@ -109,8 +111,8 @@ describe('app.get.home — 首页公开列表', () => {
 
 		await call_api(appHandler, '/api/base/app/home', 'GET')
 
-		// 6 次 ensure 查询 (建表/索引/image迁移/category扩容/老分类迁移/计数) 之后的所有调用都是 INSERT
-		const insertCalls = mockQuery.mock.calls.slice(6)
+		// 8 次 ensure 查询 (建表/索引/image迁移/category扩容/老分类迁移/camera更名/计数/cards 注册) 之后的所有调用都是 INSERT
+		const insertCalls = mockQuery.mock.calls.slice(8)
 		expect(insertCalls.length).toBeGreaterThanOrEqual(PRESET_COUNT)
 		const insertSql = insertCalls[0][0]
 		expect(insertSql).toContain('INSERT INTO base_app')
@@ -158,8 +160,9 @@ describe('app 管理端操作 — 未登录拦截', () => {
 		const res = await call_api(appHandler, '/api/base/app/insert', 'POST', {})
 
 		expect(res.status).toBe(401)
-		const insertCalls = mockQuery.mock.calls.filter(c => String(c[0]).toLowerCase().includes('insert'))
-		expect(insertCalls).toHaveLength(0)
+		// ensure 阶段本身有 cards 应用的幂等注册 INSERT，只校验业务调用段没有 INSERT
+		const businessCalls = mockQuery.mock.calls.slice(8)
+		expect(businessCalls.filter(c => String(c[0]).toLowerCase().includes('insert'))).toHaveLength(0)
 	})
 
 	it('无 token 访问公开 home 仍可正常放行', async () => {

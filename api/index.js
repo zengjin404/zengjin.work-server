@@ -10,6 +10,7 @@ import storageHandler from './_base/storage.js'
 import translateHandler from './_base/translate.js'
 import userHandler from './_base/user.js'
 import wsdemoHandler from './_base/wsdemo.js'
+import cardsHandler from './_cards.js'
 import demoHandler from './_demo.js'
 import docHandler from './_doc.js'
 import dphxbHandler from './_dphxb.js'
@@ -77,6 +78,9 @@ export default async function masterHandler(req, res) {
 					}
 
 					return res.status(404).json({ error: `base 基础网关拦截: 未识别或未挂载的业务模块 '${subModule}'` })
+
+				case 'cards':
+					return await cardsHandler(req, res)
 
 				case 'file':
 					return await fileHandler(req, res)

@@ -139,6 +139,21 @@ const presets = [
 		168,
 	],
 	[
+		'cards',
+		'认知图卡',
+		'认知图卡, 儿童, 启蒙, 早教, 动物, 水果, 颜色, 形状, 翻牌, 连线',
+		'儿童认知互动图卡，认一认、连一连、翻翻乐',
+		'fa-regular fa-images',
+		'#f59e0b',
+		'kids,daily',
+		'',
+		0,
+		'NEW',
+		1,
+		true,
+		172,
+	],
+	[
 		'color',
 		'色彩工具箱',
 		'颜色转换, 配色设计, 色阶, 渐变, 对比度, 取色, 色板, Color Tools',
@@ -290,6 +305,20 @@ async function ensure_dbInitialized_async() {
 				[base.getId(), ...p],
 			)
 		}
+	}
+
+	// 新增长期应用（如认知图卡）必须显式幂等注册：
+	// 线上 base_app 可能已多于 presets.length，计数种子会整体跳过，不能只依赖上面的补种分支。
+	const cardsPreset = presets.find(p => p[0] === 'cards')
+	if (cardsPreset) {
+		await db.query(
+			`
+			INSERT INTO base_app (id, name, title, alias, "desc", icon, icon_color, category, url, featured, tag, visibility, status, show, sort)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'public', $12, $13, $14)
+			ON CONFLICT (name) DO NOTHING
+		`,
+			[base.getId(), ...cardsPreset],
+		)
 	}
 
 	dbInitialized = true
