@@ -45,10 +45,13 @@ CREATE INDEX IF NOT EXISTS idx_cards_item_publish ON cards_item (publish_status,
 CREATE TABLE IF NOT EXISTS cards_asset (
     id          VARCHAR(20) PRIMARY KEY,
     card_id     VARCHAR(20) NOT NULL,
-    asset_type  VARCHAR(20) NOT NULL, -- image / thumbnail / narration / sound
+    asset_type  VARCHAR(20) NOT NULL, -- image / thumbnail / narration / sound / emoji
     asset_url   VARCHAR(500) NOT NULL,
     mime_type   VARCHAR(100) DEFAULT '',
     sort_order  INT DEFAULT 0,
+    is_primary  BOOLEAN NOT NULL DEFAULT false,
+    is_enabled  BOOLEAN NOT NULL DEFAULT true,
+    is_random   BOOLEAN NOT NULL DEFAULT true,
     metadata    JSONB NOT NULL DEFAULT '{}'::jsonb,
     createtime  TIMESTAMP NOT NULL DEFAULT (now() AT TIME ZONE 'Asia/Shanghai')
 );

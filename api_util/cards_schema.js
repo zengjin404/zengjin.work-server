@@ -23,9 +23,9 @@ export const CARD_KEY_RE = /^[a-z][a-z0-9_]{1,59}$/
 export const CATEGORY_CODE_RE = /^[a-z][a-z0-9_]{1,29}$/
 export const OBJECT_ID_RE = /^[a-z0-9_-]{0,60}$/
 export const PLAY_MODES = ['recognize', 'connect', 'memory']
-export const ASSET_TYPES = ['image', 'thumbnail', 'narration', 'sound']
+export const ASSET_TYPES = ['image', 'thumbnail', 'narration', 'sound', 'emoji']
 export const EVENT_TYPES = ['hall_view', 'category_view', 'card_view', 'game_start', 'game_finish']
-export const RENDER_TYPES = ['image', 'svg']
+export const RENDER_TYPES = ['image', 'svg', 'emoji']
 
 const MAX_FUTURE_MS = 5 * 60 * 1000
 
@@ -148,19 +148,55 @@ export function sanitize_assets(value) {
 	if (!Array.isArray(value)) throw new CardsPayloadError('素材列表格式不正确')
 	if (value.length > 20) throw new CardsPayloadError('单张卡片最多关联 20 个素材')
 
-	return value.map((raw, index) => {
+	let hasPrimary = false
+	const sanitized = value.map((raw, index) => {
 		const assetType = sanitize_text(raw?.asset_type ?? raw?.assetType, 20, '素材类型')
 		if (!ASSET_TYPES.includes(assetType)) throw new CardsPayloadError(`第 ${index + 1} 个素材类型不支持`)
-		const assetUrl = sanitize_text(raw?.asset_url ?? raw?.assetUrl, 500, '素材地址')
-		if (!/^(https?:\/\/|\/)/.test(assetUrl)) throw new CardsPayloadError(`第 ${index + 1} 个素材地址不合法`)
+
+		let assetUrl = sanitize_text(raw?.asset_url ?? raw?.assetUrl, 500, '素材地址')
+		const metadata = sanitize_render_config(raw?.metadata ?? {})
+
+		if (assetType === 'emoji') {
+			const emojiChar = sanitize_text(raw?.emoji ?? metadata.emoji ?? assetUrl.replace(/^emoji:/, ''), 50, 'Emoji')
+			if (!emojiChar) throw new CardsPayloadError(`第 ${index + 1} 个 Emoji 素材内容不能为空`)
+			assetUrl = emojiChar.startsWith('emoji:') ? emojiChar : `emoji:${emojiChar}`
+			metadata.emoji = emojiChar.replace(/^emoji:/, '')
+		} else if (!/^(https?:\/\/|\/)/.test(assetUrl)) {
+			throw new CardsPayloadError(`第 ${index + 1} 个素材地址不合法`)
+		}
+
+		let isPrimary = sanitize_bool(raw?.is_primary ?? raw?.isPrimary ?? metadata.is_primary, false)
+		if (isPrimary) {
+			if (hasPrimary) isPrimary = false
+			else hasPrimary = true
+		}
+		const isEnabled = sanitize_bool(raw?.is_enabled ?? raw?.isEnabled ?? metadata.is_enabled, true)
+		const isRandom = sanitize_bool(raw?.is_random ?? raw?.isRandom ?? metadata.is_random, true)
+
+		metadata.is_primary = isPrimary
+		metadata.is_enabled = isEnabled
+		metadata.is_random = isRandom
+
 		return {
+			id: sanitize_text(raw?.id, 30, '素材 id') || undefined,
 			asset_type: assetType,
 			asset_url: assetUrl,
 			mime_type: sanitize_text(raw?.mime_type ?? raw?.mimeType, 100, '文件类型'),
 			sort_order: sanitize_int(raw?.sort_order ?? raw?.sortOrder, { min: 0, max: 9999, fallback: index * 10, field: '素材排序' }),
-			metadata: sanitize_render_config(raw?.metadata ?? {}),
+			is_primary: isPrimary,
+			is_enabled: isEnabled,
+			is_random: isRandom,
+			metadata,
 		}
 	})
+
+	if (!hasPrimary && sanitized.length > 0) {
+		const firstVisual = sanitized.find(a => ['image', 'thumbnail', 'emoji'].includes(a.asset_type) && a.is_enabled) || sanitized[0]
+		firstVisual.is_primary = true
+		firstVisual.metadata.is_primary = true
+	}
+
+	return sanitized
 }
 
 /** 分类写入载荷 */
@@ -300,6 +336,16 @@ export function sanitize_play_payload(body = {}) {
 	}
 }
 
+export const COGNITION_GLOBAL_MODES = ['fixed_image', 'random_image', 'image_text']
+export const COGNITION_OVERRIDE_MODES = ['inherit', 'fixed_image', 'random_image', 'image_text']
+
+function map_legacy_mode(val) {
+	if (val === 'visual' || val === 'same') return 'fixed_image'
+	if (val === 'literacy' || val === 'image_text') return 'image_text'
+	if (val === 'inherit') return 'inherit'
+	return null
+}
+
 /**
  * 认知方式配置（全局预设 + 玩法独立覆盖）
  *
@@ -319,24 +365,53 @@ export function sanitize_cognition_settings(value) {
 	if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new CardsPayloadError('认知设置必须是对象')
 	if (JSON.stringify(raw).length > 8192) throw new CardsPayloadError('认知设置不能超过 8KB')
 
-	const preset = ['visual', 'literacy'].includes(raw.cognitionPreset) ? raw.cognitionPreset : 'visual'
-	const modes = ['inherit', 'visual', 'literacy']
-	const inputModes = raw.gameCognitionModes && typeof raw.gameCognitionModes === 'object' ? raw.gameCognitionModes : {}
-	const inputOptions = raw.gameOptions && typeof raw.gameOptions === 'object' ? raw.gameOptions : {}
+	let globalMode = 'fixed_image'
+	if (COGNITION_GLOBAL_MODES.includes(raw.globalMode)) {
+		globalMode = raw.globalMode
+	} else if (raw.cognitionPreset) {
+		const mapped = map_legacy_mode(raw.cognitionPreset)
+		if (mapped && mapped !== 'inherit') globalMode = mapped
+	}
 
-	const matchingPairs = Number(inputOptions.matching?.pairCount)
+	const overridesInput = raw.overrides && typeof raw.overrides === 'object' ? raw.overrides : {}
+	const legacyModes = raw.gameCognitionModes && typeof raw.gameCognitionModes === 'object' ? raw.gameCognitionModes : {}
+
+	function resolve_override(game) {
+		const direct = overridesInput[game]
+		if (COGNITION_OVERRIDE_MODES.includes(direct)) return direct
+		const legacy = legacyModes[game === 'connect' ? (legacyModes.connect ? 'connect' : 'matching') : game]
+		const mapped = map_legacy_mode(legacy)
+		if (mapped) return mapped
+		return 'inherit'
+	}
+
+	const inputOptions = raw.gameOptions && typeof raw.gameOptions === 'object' ? raw.gameOptions : {}
+	const connectPairs = Number(inputOptions.connect?.pairCount ?? inputOptions.matching?.pairCount)
 	const memoryPairs = Number(inputOptions.memory?.pairCount)
 
+	const recognizeOverride = resolve_override('recognize')
+	const connectOverride = resolve_override('connect')
+	const memoryOverride = resolve_override('memory')
+
+	const toLegacy = m => (m === 'image_text' ? 'literacy' : m === 'fixed_image' ? 'visual' : 'inherit')
+
 	return {
-		version: 1,
-		cognitionPreset: preset,
+		version: 2,
+		globalMode,
+		cognitionPreset: globalMode === 'image_text' ? 'literacy' : 'visual',
+		overrides: {
+			recognize: recognizeOverride,
+			connect: connectOverride,
+			memory: memoryOverride,
+		},
 		gameCognitionModes: {
-			recognize: modes.includes(inputModes.recognize) ? inputModes.recognize : 'inherit',
-			matching: modes.includes(inputModes.matching) ? inputModes.matching : 'inherit',
-			memory: modes.includes(inputModes.memory) ? inputModes.memory : 'inherit',
+			recognize: toLegacy(recognizeOverride),
+			matching: toLegacy(connectOverride),
+			memory: toLegacy(memoryOverride),
 		},
 		gameOptions: {
-			matching: { pairCount: [3, 4, 5].includes(matchingPairs) ? matchingPairs : 4 },
+			connect: { pairCount: [3, 4, 5].includes(connectPairs) ? connectPairs : 4 },
+			matching: { pairCount: [3, 4, 5].includes(connectPairs) ? connectPairs : 4 },
 			memory: {
 				pairCount: [4, 6, 8, 10].includes(memoryPairs) ? memoryPairs : 6,
 				previewEnabled: typeof inputOptions.memory?.previewEnabled === 'boolean' ? inputOptions.memory.previewEnabled : true,

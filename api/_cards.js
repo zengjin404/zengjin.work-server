@@ -131,10 +131,16 @@ async function ensure_dbInitialized_async() {
 			asset_url   VARCHAR(500) NOT NULL,
 			mime_type   VARCHAR(100) DEFAULT '',
 			sort_order  INT DEFAULT 0,
+			is_primary  BOOLEAN NOT NULL DEFAULT false,
+			is_enabled  BOOLEAN NOT NULL DEFAULT true,
+			is_random   BOOLEAN NOT NULL DEFAULT true,
 			metadata    JSONB NOT NULL DEFAULT '{}'::jsonb,
 			createtime  TIMESTAMP NOT NULL DEFAULT ${NOW_SQL}
 		);
 	`)
+	await db.query(`ALTER TABLE ${T_ASSET} ADD COLUMN IF NOT EXISTS is_primary BOOLEAN NOT NULL DEFAULT false`)
+	await db.query(`ALTER TABLE ${T_ASSET} ADD COLUMN IF NOT EXISTS is_enabled BOOLEAN NOT NULL DEFAULT true`)
+	await db.query(`ALTER TABLE ${T_ASSET} ADD COLUMN IF NOT EXISTS is_random BOOLEAN NOT NULL DEFAULT true`)
 	await db.query(`CREATE INDEX IF NOT EXISTS idx_cards_asset_card ON ${T_ASSET} (card_id, asset_type, sort_order)`)
 
 	await db.query(`
@@ -328,11 +334,16 @@ routes['get:cards_content:bootstrap'] = async ({ query }) => {
 			 ORDER BY c.sort_order ASC, i.sort_order ASC, i.createtime ASC`,
 		),
 		db.query(
-			`SELECT a.card_id, i.card_key, a.asset_type, a.asset_url, a.mime_type, a.sort_order, a.metadata
+			`SELECT a.id, a.card_id, i.card_key, a.asset_type, a.asset_url, a.mime_type, a.sort_order,
+			        COALESCE(a.is_primary, (a.metadata->>'is_primary')::boolean, false) AS is_primary,
+			        COALESCE(a.is_enabled, (a.metadata->>'is_enabled')::boolean, true) AS is_enabled,
+			        COALESCE(a.is_random, (a.metadata->>'is_random')::boolean, true) AS is_random,
+			        a.metadata
 			 FROM ${T_ASSET} a
 			 JOIN ${T_ITEM} i ON i.id = a.card_id
 			 JOIN ${T_CATEGORY} c ON c.id = i.category_id
 			 WHERE i.publish_status = 1 AND i.is_enabled = true AND c.publish_status = 1 AND c.is_enabled = true
+			   AND (a.is_enabled IS NOT FALSE)
 			 ORDER BY a.sort_order ASC, a.createtime ASC`,
 		),
 	])
@@ -708,7 +719,11 @@ routes['get:cards_admin_item:detail'] = requireAdmin(async ({ query }) => {
 			[id],
 		),
 		db.query(
-			`SELECT id, asset_type, asset_url, mime_type, sort_order, metadata
+			`SELECT id, asset_type, asset_url, mime_type, sort_order,
+			        COALESCE(is_primary, (metadata->>'is_primary')::boolean, false) AS is_primary,
+			        COALESCE(is_enabled, (metadata->>'is_enabled')::boolean, true) AS is_enabled,
+			        COALESCE(is_random, (metadata->>'is_random')::boolean, true) AS is_random,
+			        metadata
 			 FROM ${T_ASSET} WHERE card_id = $1
 			 ORDER BY asset_type ASC, sort_order ASC`,
 			[id],
@@ -847,11 +862,19 @@ routes['post:cards_admin_item:duplicate'] = requireAdmin(async ({ body }) => {
 	}
 
 	// 复制素材关联（不复制二进制）
-	const assetRes = await db.query(`SELECT asset_type, asset_url, mime_type, sort_order, metadata FROM ${T_ASSET} WHERE card_id = $1`, [id])
+	const assetRes = await db.query(
+		`SELECT asset_type, asset_url, mime_type, sort_order,
+		        COALESCE(is_primary, (metadata->>'is_primary')::boolean, false) AS is_primary,
+		        COALESCE(is_enabled, (metadata->>'is_enabled')::boolean, true) AS is_enabled,
+		        COALESCE(is_random, (metadata->>'is_random')::boolean, true) AS is_random,
+		        metadata
+		 FROM ${T_ASSET} WHERE card_id = $1`,
+		[id],
+	)
 	for (const asset of assetRes.rows || []) {
 		await db.query(
-			`INSERT INTO ${T_ASSET} (id, card_id, asset_type, asset_url, mime_type, sort_order, metadata, createtime)
-			 VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, ${NOW_SQL})`,
+			`INSERT INTO ${T_ASSET} (id, card_id, asset_type, asset_url, mime_type, sort_order, is_primary, is_enabled, is_random, metadata, createtime)
+			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb, ${NOW_SQL})`,
 			[
 				base.getId(),
 				newId,
@@ -859,6 +882,9 @@ routes['post:cards_admin_item:duplicate'] = requireAdmin(async ({ body }) => {
 				asset.asset_url,
 				asset.mime_type,
 				asset.sort_order,
+				Boolean(asset.is_primary),
+				asset.is_enabled !== false,
+				asset.is_random !== false,
 				typeof asset.metadata === 'string' ? asset.metadata : JSON.stringify(asset.metadata || {}),
 			],
 		)
@@ -875,10 +901,22 @@ async function assert_category_exists(categoryId) {
 
 async function insert_assets_async(cardId, assets) {
 	for (const asset of assets) {
+		const assetId = asset.id || base.getId()
 		await db.query(
-			`INSERT INTO ${T_ASSET} (id, card_id, asset_type, asset_url, mime_type, sort_order, metadata, createtime)
-			 VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, ${NOW_SQL})`,
-			[base.getId(), cardId, asset.asset_type, asset.asset_url, asset.mime_type, asset.sort_order, JSON.stringify(asset.metadata || {})],
+			`INSERT INTO ${T_ASSET} (id, card_id, asset_type, asset_url, mime_type, sort_order, is_primary, is_enabled, is_random, metadata, createtime)
+			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb, ${NOW_SQL})`,
+			[
+				assetId,
+				cardId,
+				asset.asset_type,
+				asset.asset_url,
+				asset.mime_type,
+				asset.sort_order,
+				Boolean(asset.is_primary),
+				asset.is_enabled !== false,
+				asset.is_random !== false,
+				JSON.stringify(asset.metadata || {}),
+			],
 		)
 	}
 }

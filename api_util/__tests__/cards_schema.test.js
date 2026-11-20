@@ -72,13 +72,17 @@ describe('cards_schema — 渲染配置与素材', () => {
 		expect(() => sanitize_render_config(deep)).toThrow('嵌套过深')
 	})
 
-	it('素材只接受受支持类型与 http/绝对路径', () => {
+	it('素材只接受受支持类型与 http/绝对路径，支持 emoji 与主图标记', () => {
 		const assets = sanitize_assets([
-			{ asset_type: 'image', asset_url: 'https://drive.zengjin.work/a.webp', mime_type: 'image/webp' },
+			{ asset_type: 'image', asset_url: 'https://drive.zengjin.work/a.webp', mime_type: 'image/webp', is_primary: true },
+			{ asset_type: 'emoji', emoji: '🍎', is_random: true },
 			{ asset_type: 'sound', asset_url: '/local/a.mp3' },
 		])
-		expect(assets).toHaveLength(2)
+		expect(assets).toHaveLength(3)
 		expect(assets[0].sort_order).toBe(0)
+		expect(assets[0].is_primary).toBe(true)
+		expect(assets[1].asset_url).toBe('emoji:🍎')
+		expect(assets[1].metadata.emoji).toBe('🍎')
 		expect(() => sanitize_assets([{ asset_type: 'video', asset_url: 'https://x/y.mp4' }])).toThrow('素材类型不支持')
 		expect(() => sanitize_assets([{ asset_type: 'image', asset_url: 'javascript:alert(1)' }])).toThrow('素材地址不合法')
 	})
@@ -105,25 +109,38 @@ describe('cards_schema — 对局', () => {
 })
 
 describe('cards_schema — 认知设置', () => {
-	it('合法设置原样收敛', () => {
+	it('v2 合法设置原样收敛', () => {
+		const settings = sanitize_cognition_settings({
+			version: 2,
+			globalMode: 'random_image',
+			overrides: { recognize: 'inherit', connect: 'fixed_image', memory: 'image_text' },
+			gameOptions: { connect: { pairCount: 5 }, memory: { pairCount: 10, previewEnabled: false } },
+		})
+		expect(settings.version).toBe(2)
+		expect(settings.globalMode).toBe('random_image')
+		expect(settings.overrides).toEqual({ recognize: 'inherit', connect: 'fixed_image', memory: 'image_text' })
+		expect(settings.gameOptions.connect.pairCount).toBe(5)
+		expect(settings.gameOptions.memory.pairCount).toBe(10)
+		expect(settings.gameOptions.memory.previewEnabled).toBe(false)
+	})
+
+	it('旧版 v1 设置平滑迁移至 v2', () => {
 		const settings = sanitize_cognition_settings({
 			cognitionPreset: 'literacy',
 			gameCognitionModes: { recognize: 'inherit', matching: 'visual', memory: 'literacy' },
-			gameOptions: { matching: { pairCount: 5 }, memory: { pairCount: 10, previewEnabled: false } },
+			gameOptions: { matching: { pairCount: 5 }, memory: { pairCount: 8, previewEnabled: true } },
 		})
-		expect(settings).toEqual({
-			version: 1,
-			cognitionPreset: 'literacy',
-			gameCognitionModes: { recognize: 'inherit', matching: 'visual', memory: 'literacy' },
-			gameOptions: { matching: { pairCount: 5 }, memory: { pairCount: 10, previewEnabled: false } },
-		})
+		expect(settings.version).toBe(2)
+		expect(settings.globalMode).toBe('image_text')
+		expect(settings.overrides).toEqual({ recognize: 'inherit', connect: 'fixed_image', memory: 'image_text' })
+		expect(settings.gameOptions.connect.pairCount).toBe(5)
 	})
 
 	it('未知值与缺失字段回退默认值', () => {
 		const settings = sanitize_cognition_settings({ cognitionPreset: 'x', gameCognitionModes: { memory: 'x' } })
-		expect(settings.cognitionPreset).toBe('visual')
-		expect(settings.gameCognitionModes).toEqual({ recognize: 'inherit', matching: 'inherit', memory: 'inherit' })
-		expect(settings.gameOptions.matching.pairCount).toBe(4)
+		expect(settings.globalMode).toBe('fixed_image')
+		expect(settings.overrides).toEqual({ recognize: 'inherit', connect: 'inherit', memory: 'inherit' })
+		expect(settings.gameOptions.connect.pairCount).toBe(4)
 		expect(settings.gameOptions.memory).toEqual({ pairCount: 6, previewEnabled: true })
 	})
 
