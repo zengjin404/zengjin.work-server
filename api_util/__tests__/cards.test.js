@@ -423,3 +423,22 @@ describe('cards 用户认知设置 — 身份边界', () => {
 		expect(settingCalls).toHaveLength(0)
 	})
 })
+
+describe('cards 数据库约束', () => {
+	it('初始化时为素材主图创建部分唯一索引', async () => {
+		const handler = await load_cards()
+		await call_api(handler, '/api/cards/content/version', 'GET')
+
+		const indexCall = mockQuery.mock.calls.find(call => sqlOf(call).includes('idx_cards_asset_primary'))
+		expect(indexCall).toBeTruthy()
+		expect(sqlOf(indexCall)).toContain('UNIQUE INDEX')
+		expect(sqlOf(indexCall)).toContain('WHERE is_primary')
+
+		// 建唯一索引前先把历史多主图收敛为一张，避免存量数据导致启动失败
+		const sqlList = mockQuery.mock.calls.map(sqlOf)
+		const normalizeIndex = sqlList.findIndex(sql => sql.includes('UPDATE') && sql.includes('is_primary = false'))
+		const uniqueIndex = sqlList.findIndex(sql => sql.includes('idx_cards_asset_primary'))
+		expect(normalizeIndex).toBeGreaterThanOrEqual(0)
+		expect(normalizeIndex).toBeLessThan(uniqueIndex)
+	})
+})

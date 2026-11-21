@@ -136,6 +136,16 @@ describe('cards_schema — 认知设置', () => {
 		expect(settings.gameOptions.connect.pairCount).toBe(5)
 	})
 
+	it('随机图片覆盖在旧版别名中近似为 visual，与客户端序列化一致', () => {
+		const settings = sanitize_cognition_settings({
+			globalMode: 'image_text',
+			overrides: { connect: 'random_image' },
+		})
+		expect(settings.overrides.connect).toBe('random_image')
+		expect(settings.gameCognitionModes.matching).toBe('visual')
+		expect(settings.cognitionPreset).toBe('literacy')
+	})
+
 	it('未知值与缺失字段回退默认值', () => {
 		const settings = sanitize_cognition_settings({ cognitionPreset: 'x', gameCognitionModes: { memory: 'x' } })
 		expect(settings.globalMode).toBe('fixed_image')
@@ -147,5 +157,49 @@ describe('cards_schema — 认知设置', () => {
 	it('拒绝非对象与超大载荷', () => {
 		expect(() => sanitize_cognition_settings([])).toThrow('必须是对象')
 		expect(() => sanitize_cognition_settings({ padding: 'x'.repeat(9000) })).toThrow('不能超过 8KB')
+	})
+})
+
+describe('cards_schema — 素材主图与 id 完整性', () => {
+	it('拒绝停用的主图', () => {
+		expect(() => sanitize_assets([{ asset_type: 'image', asset_url: 'https://cdn/a.webp', is_primary: true, is_enabled: false }])).toThrow('主图不能停用')
+	})
+
+	it('非视觉素材不会被当作主图', () => {
+		const assets = sanitize_assets([
+			{ asset_type: 'sound', asset_url: '/a.mp3', is_primary: true },
+			{ asset_type: 'image', asset_url: 'https://cdn/a.webp', is_enabled: true },
+		])
+		expect(assets[0].is_primary).toBe(false)
+		expect(assets[1].is_primary).toBe(true)
+	})
+
+	it('多个主图只保留第一个', () => {
+		const assets = sanitize_assets([
+			{ asset_type: 'image', asset_url: 'https://cdn/a.webp', is_primary: true },
+			{ asset_type: 'emoji', emoji: '🍎', is_primary: true },
+		])
+		expect(assets.filter(asset => asset.is_primary)).toHaveLength(1)
+		expect(assets[0].is_primary).toBe(true)
+		expect(assets[1].is_primary).toBe(false)
+	})
+
+	it('没有显式主图时只自动选择已启用视觉素材', () => {
+		const assets = sanitize_assets([
+			{ asset_type: 'image', asset_url: 'https://cdn/a.webp', is_enabled: false },
+			{ asset_type: 'emoji', emoji: '🍎', is_enabled: true },
+		])
+		expect(assets[0].is_primary).toBe(false)
+		expect(assets[1].is_primary).toBe(true)
+	})
+
+	it('拒绝重复素材 id 与超过 20 字符的 id', () => {
+		expect(() =>
+			sanitize_assets([
+				{ id: 'same-id', asset_type: 'image', asset_url: 'https://cdn/a.webp' },
+				{ id: 'same-id', asset_type: 'image', asset_url: 'https://cdn/b.webp' },
+			]),
+		).toThrow('素材 id 重复')
+		expect(() => sanitize_assets([{ id: 'x'.repeat(21), asset_type: 'image', asset_url: 'https://cdn/a.webp' }])).toThrow('不能超过 20 个字符')
 	})
 })

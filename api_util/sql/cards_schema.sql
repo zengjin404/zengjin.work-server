@@ -1,4 +1,4 @@
--- 认知图卡 (cards) 表结构
+-- 图卡乐园 (cards) 表结构
 -- 说明：这些表由 api/_cards.js 在首次请求时幂等自动创建；
 --       本脚本仅作为 DDL 文档与手动初始化参考（对齐 api_util/sql/fc_schema.sql 惯例）。
 -- 时间列统一为无时区 TIMESTAMP + 北京时间字面值。
@@ -56,6 +56,7 @@ CREATE TABLE IF NOT EXISTS cards_asset (
     createtime  TIMESTAMP NOT NULL DEFAULT (now() AT TIME ZONE 'Asia/Shanghai')
 );
 CREATE INDEX IF NOT EXISTS idx_cards_asset_card ON cards_asset (card_id, asset_type, sort_order);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_cards_asset_primary ON cards_asset (card_id) WHERE is_primary;
 
 CREATE TABLE IF NOT EXISTS cards_user_progress (
     id               VARCHAR(20) PRIMARY KEY,

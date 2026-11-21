@@ -140,9 +140,9 @@ const presets = [
 	],
 	[
 		'cards',
-		'认知图卡',
-		'认知图卡, 儿童, 启蒙, 早教, 动物, 水果, 颜色, 形状, 翻牌, 连线',
-		'儿童认知互动图卡，认一认、连一连、翻翻乐',
+		'图卡乐园',
+		'图卡乐园, 儿童, 启蒙, 早教, 动物, 水果, 颜色, 形状, 翻牌, 连线',
+		'儿童认知互动图卡，认一认、连一连、翻一翻',
 		'fa-regular fa-images',
 		'#f59e0b',
 		'kids,daily',
@@ -307,7 +307,7 @@ async function ensure_dbInitialized_async() {
 		}
 	}
 
-	// 新增长期应用（如认知图卡）必须显式幂等注册：
+	// 新增长期应用（如图卡乐园）必须显式幂等注册：
 	// 线上 base_app 可能已多于 presets.length，计数种子会整体跳过，不能只依赖上面的补种分支。
 	const cardsPreset = presets.find(p => p[0] === 'cards')
 	if (cardsPreset) {
@@ -315,7 +315,11 @@ async function ensure_dbInitialized_async() {
 			`
 			INSERT INTO base_app (id, name, title, alias, "desc", icon, icon_color, category, url, featured, tag, visibility, status, show, sort)
 			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'public', $12, $13, $14)
-			ON CONFLICT (name) DO NOTHING
+			ON CONFLICT (name) DO UPDATE SET
+				title = EXCLUDED.title,
+				alias = EXCLUDED.alias,
+				"desc" = EXCLUDED."desc"
+			WHERE base_app.title = '认知图卡'
 		`,
 			[base.getId(), ...cardsPreset],
 		)

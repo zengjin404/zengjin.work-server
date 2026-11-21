@@ -17,7 +17,7 @@ import { seed_categories, seed_items } from '#api_util/cards_seed.js'
 import db from '#api_util/db.js'
 
 /**
- * 认知图卡 (cards) 全栈接口
+ * 图卡乐园 (cards) 全栈接口
  *
  * 设计要点：
  *   1. 内容读取公开、进度/收藏/对局需要登录；管理接口一律 requireAdmin。
@@ -142,6 +142,18 @@ async function ensure_dbInitialized_async() {
 	await db.query(`ALTER TABLE ${T_ASSET} ADD COLUMN IF NOT EXISTS is_enabled BOOLEAN NOT NULL DEFAULT true`)
 	await db.query(`ALTER TABLE ${T_ASSET} ADD COLUMN IF NOT EXISTS is_random BOOLEAN NOT NULL DEFAULT true`)
 	await db.query(`CREATE INDEX IF NOT EXISTS idx_cards_asset_card ON ${T_ASSET} (card_id, asset_type, sort_order)`)
+	// 历史数据可能在同一卡片上存在多条 is_primary；先按 (sort_order, id) 保留第一条，避免唯一索引创建失败
+	await db.query(`
+		UPDATE ${T_ASSET} a SET is_primary = false
+		WHERE a.is_primary = true
+		  AND EXISTS (
+			SELECT 1 FROM ${T_ASSET} b
+			WHERE b.card_id = a.card_id AND b.is_primary = true
+			  AND (b.sort_order, b.id) < (a.sort_order, a.id)
+		  )
+	`)
+	// 同一张卡片最多一个主图：服务端白名单之外再加一层数据库约束
+	await db.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_cards_asset_primary ON ${T_ASSET} (card_id) WHERE is_primary`)
 
 	await db.query(`
 		CREATE TABLE IF NOT EXISTS ${T_PROGRESS} (
@@ -992,11 +1004,11 @@ export default async (req, resp) => {
 		await ensure_dbInitialized_async()
 
 		const handler = routes[`${method}:${table}:${action}`]
-		if (!handler) return base.respFailure({ msg: `认知图卡模块未知操作: ${method} ${table || ''}/${action || ''}` })
+		if (!handler) return base.respFailure({ msg: `图卡乐园模块未知操作: ${method} ${table || ''}/${action || ''}` })
 		return await handler({ req, resp, query, body })
 	} catch (error) {
 		if (error instanceof CardsPayloadError) return base.respFailure({ msg: error.message })
-		console.error('认知图卡模块异常:', error)
-		return base.respFailure({ msg: '认知图卡服务暂时不可用，请稍后重试' })
+		console.error('图卡乐园模块异常:', error)
+		return base.respFailure({ msg: '图卡乐园服务暂时不可用，请稍后重试' })
 	}
 }

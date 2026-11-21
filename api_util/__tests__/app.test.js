@@ -60,7 +60,7 @@ const admin_token = () => `Bearer ${generateAccessToken({ userId: 'admin001', us
 // 数量对不上会让补种 INSERT 抢占后续 mock 队列，表现为「首页查询莫名失败」
 const PRESET_COUNT = 36
 
-// 默认 mock：ensure 阶段 8 个查询 (建表/索引/image迁移/category扩容/老数据刷正/camera 更名/计数/认知图卡显式注册)
+// 默认 mock：ensure 阶段 8 个查询 (建表/索引/image迁移/category扩容/老数据刷正/camera 更名/计数/图卡乐园显式注册)
 function mock_ensure(count = String(PRESET_COUNT)) {
 	mockQuery
 		.mockResolvedValueOnce({ rows: [], rowCount: 0 }) // CREATE TABLE
@@ -101,6 +101,18 @@ describe('app.get.home — 首页公开列表', () => {
 		expect(homeSql).toContain('ORDER BY featured DESC, sort ASC, createtime ASC')
 		// 封面图字段必须随列表返回（大卡封面 / 图标降级共用）
 		expect(homeSql).toContain('image')
+	})
+
+	it('cards 显式注册会把旧中文名迁移为图卡乐园', async () => {
+		const appHandler = await load_app()
+		mock_ensure()
+		mockQuery.mockResolvedValue({ rows: [], rowCount: 0 })
+
+		await call_api(appHandler, '/api/base/app/home', 'GET')
+
+		const cardsCall = mockQuery.mock.calls[7]
+		expect(String(cardsCall[0])).toContain('ON CONFLICT (name) DO UPDATE')
+		expect(String(cardsCall[0])).toContain("base_app.title = '认知图卡'")
 	})
 
 	it('种子缺失时以 ON CONFLICT 幂等补插（不覆盖已存在行）', async () => {

@@ -3,7 +3,7 @@ import dayjs from 'dayjs'
 import base from '#api_util/base.js'
 
 /**
- * 认知图卡 (cards) 入参白名单与校验
+ * 图卡乐园 (cards) 入参白名单与校验
  *
  * 原则：
  *   1. 所有对外写接口先过本文件，非法载荷连一次 SQL 都不发。
@@ -142,6 +142,9 @@ export function sanitize_render_config(value) {
 	return obj
 }
 
+/** 视觉素材类型：只有这些类型可以成为主图 */
+const VISUAL_ASSET_TYPES = ['image', 'thumbnail', 'emoji']
+
 /** 素材列表：仅允许受控类型与可访问 URL */
 export function sanitize_assets(value) {
 	if (value == null) return null
@@ -149,6 +152,7 @@ export function sanitize_assets(value) {
 	if (value.length > 20) throw new CardsPayloadError('单张卡片最多关联 20 个素材')
 
 	let hasPrimary = false
+	const seenIds = new Set()
 	const sanitized = value.map((raw, index) => {
 		const assetType = sanitize_text(raw?.asset_type ?? raw?.assetType, 20, '素材类型')
 		if (!ASSET_TYPES.includes(assetType)) throw new CardsPayloadError(`第 ${index + 1} 个素材类型不支持`)
@@ -165,20 +169,30 @@ export function sanitize_assets(value) {
 			throw new CardsPayloadError(`第 ${index + 1} 个素材地址不合法`)
 		}
 
+		const id = sanitize_text(raw?.id, 20, '素材 id') || undefined
+		if (id) {
+			if (seenIds.has(id)) throw new CardsPayloadError(`第 ${index + 1} 个素材 id 重复`)
+			seenIds.add(id)
+		}
+
+		const isEnabled = sanitize_bool(raw?.is_enabled ?? raw?.isEnabled ?? metadata.is_enabled, true)
+		const isRandom = sanitize_bool(raw?.is_random ?? raw?.isRandom ?? metadata.is_random, true)
+
+		// 主图只能落在受支持的视觉素材上，且不能是停用状态
 		let isPrimary = sanitize_bool(raw?.is_primary ?? raw?.isPrimary ?? metadata.is_primary, false)
+		if (isPrimary && !VISUAL_ASSET_TYPES.includes(assetType)) isPrimary = false
+		if (isPrimary && !isEnabled) throw new CardsPayloadError('主图不能停用，请先指定新的主图')
 		if (isPrimary) {
 			if (hasPrimary) isPrimary = false
 			else hasPrimary = true
 		}
-		const isEnabled = sanitize_bool(raw?.is_enabled ?? raw?.isEnabled ?? metadata.is_enabled, true)
-		const isRandom = sanitize_bool(raw?.is_random ?? raw?.isRandom ?? metadata.is_random, true)
 
 		metadata.is_primary = isPrimary
 		metadata.is_enabled = isEnabled
 		metadata.is_random = isRandom
 
 		return {
-			id: sanitize_text(raw?.id, 30, '素材 id') || undefined,
+			id,
 			asset_type: assetType,
 			asset_url: assetUrl,
 			mime_type: sanitize_text(raw?.mime_type ?? raw?.mimeType, 100, '文件类型'),
@@ -190,10 +204,13 @@ export function sanitize_assets(value) {
 		}
 	})
 
-	if (!hasPrimary && sanitized.length > 0) {
-		const firstVisual = sanitized.find(a => ['image', 'thumbnail', 'emoji'].includes(a.asset_type) && a.is_enabled) || sanitized[0]
-		firstVisual.is_primary = true
-		firstVisual.metadata.is_primary = true
+	// 兼容历史/旧客户端：没有显式主图时，自动选择第一张「已启用」的视觉素材
+	if (!hasPrimary) {
+		const firstVisual = sanitized.find(a => VISUAL_ASSET_TYPES.includes(a.asset_type) && a.is_enabled)
+		if (firstVisual) {
+			firstVisual.is_primary = true
+			firstVisual.metadata.is_primary = true
+		}
 	}
 
 	return sanitized
@@ -393,7 +410,9 @@ export function sanitize_cognition_settings(value) {
 	const connectOverride = resolve_override('connect')
 	const memoryOverride = resolve_override('memory')
 
-	const toLegacy = m => (m === 'image_text' ? 'literacy' : m === 'fixed_image' ? 'visual' : 'inherit')
+	// 旧版只有 visual / literacy / inherit 三态：random_image 无法表达时按 fixed_image 近似，
+	// 避免回退成 inherit 后被旧版全局的 literacy 误当作纯文字模式。与客户端 to_legacy_override 保持一致。
+	const toLegacy = m => (m === 'image_text' ? 'literacy' : m === 'inherit' ? 'inherit' : 'visual')
 
 	return {
 		version: 2,
