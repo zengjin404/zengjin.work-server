@@ -15,11 +15,36 @@ import {
 	sanitize_cognition_settings,
 	sanitize_event_payload,
 	sanitize_favorite_payload,
+	sanitize_item_payload,
 	sanitize_play_payload,
 	sanitize_progress_payload,
 	sanitize_render_config,
 	sanitize_timestamp,
+	suggest_card_key,
 } from '#api_util/cards_schema.js'
+
+describe('cards_schema — 卡片入参', () => {
+	it('可以根据分类与文字自动生成 card_key', () => {
+		expect(suggest_card_key('animal', { label: '兔子', en_label: 'rabbit' })).toBe('animal_rabbit')
+		expect(suggest_card_key('number', { label: '1' })).toBe('number_1')
+		expect(suggest_card_key('fruit', { label: '苹果', pinyin: 'píng guǒ' })).toBe('fruit_ping_guo')
+		expect(suggest_card_key('', { label: '猫' })).toBe('card_card')
+	})
+
+	it('不再要求或接受前端渲染字段', () => {
+		const payload = sanitize_item_payload({
+			card_key: 'audit_card',
+			category_id: 'cc_animal',
+			label: '猫',
+			play_modes: ['recognize'],
+			render_type: 'svg',
+			render_config: { kind: 'illustration', key: 'animal_cat' },
+		})
+		expect(payload.render_type).toBeUndefined()
+		expect(payload.render_config).toBeUndefined()
+		expect(payload.play_modes).toBe('recognize')
+	})
+})
 
 describe('cards_schema — 时间', () => {
 	it('北京时间字面值原样保留（不做时区二次换算）', () => {

@@ -4,8 +4,7 @@
 // 约束：
 //   1. category.id 固定且 <=20 字符，item.id 由数组顺序生成 (ci0001...)，card_key 才是稳定业务标识。
 //   2. card_key 一经发布不可修改；用户进度、统计都以 card_key 记录。
-//   3. 生活认知卡片使用本地自绘 SVG 插画 (render_config.kind = illustration)；
-//      基础概念卡片使用程序化渲染 (number / letter / color / shape / size)。
+//   3. 种子只包含文字内容；图片 / 图标全部由管理员通过 cards_asset 录入，前端不生成视觉。
 //   4. 拼音、英文、介绍均为人工编写，供 3~6 岁儿童使用，避免复杂科普。
 
 // 分类：8 个生活认知 + 5 个基础概念
@@ -202,8 +201,6 @@ const life_items = [
 	en_label,
 	description,
 	knowledge,
-	render_type: 'svg',
-	render_config: { kind: 'illustration', key: card_key },
 	sort_order: (index % 6) * 10 + 10,
 }))
 
@@ -220,8 +217,6 @@ const number_items = number_en.map((en_label, i) => {
 		en_label,
 		description: `这是数字 ${value}，数一数图里有 ${value} 个圆点。`,
 		knowledge: `${value} 可以表示 ${value} 个东西。`,
-		render_type: 'svg',
-		render_config: { kind: 'number', value },
 		sort_order: (i + 1) * 10,
 	}
 })
@@ -263,8 +258,6 @@ const letter_items = letter_words.map(([letter, word, wordCn], i) => ({
 	en_label: letter,
 	description: `${letter} 是字母表的第 ${i + 1} 个字母。`,
 	knowledge: `${letter} 开头的单词：${word}（${wordCn}）。`,
-	render_type: 'svg',
-	render_config: { kind: 'letter', value: letter, word, wordCn },
 	sort_order: (i + 1) * 10,
 }))
 
@@ -289,8 +282,6 @@ const color_items = color_items_data.map(([key, label, pinyin, en_label, value, 
 	en_label,
 	description,
 	knowledge: '颜色让我们的世界变得丰富多彩。',
-	render_type: 'svg',
-	render_config: { kind: 'color', value, label },
 	sort_order: (i + 1) * 10,
 }))
 
@@ -313,8 +304,6 @@ const shape_items = shape_items_data.map(([key, label, pinyin, en_label, descrip
 	en_label,
 	description,
 	knowledge: '形状藏在生活的很多地方。',
-	render_type: 'svg',
-	render_config: { kind: 'shape', value: key },
 	sort_order: (i + 1) * 10,
 }))
 
@@ -337,8 +326,6 @@ const size_items = size_items_data.map(([key, label, pinyin, en_label, compare, 
 	en_label,
 	description,
 	knowledge: '比一比，就能发现大小、长短、高矮和多少的不同。',
-	render_type: 'svg',
-	render_config: { kind: 'size', value: key, compare },
 	sort_order: (i + 1) * 10,
 }))
 
@@ -383,7 +370,6 @@ export function validate_seed() {
 		if (!item.id || item.id.length > 20) errors.push(`卡片 id 超出 20 字符: ${item.id}`)
 		if (!item.label) errors.push(`卡片缺少名称: ${item.card_key}`)
 		if (/[一-龥]/.test(item.label) && !item.pinyin) errors.push(`中文卡片缺少拼音: ${item.card_key}`)
-		if (!item.render_config || typeof item.render_config !== 'object') errors.push(`卡片缺少渲染配置: ${item.card_key}`)
 	}
 	return errors
 }

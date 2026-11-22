@@ -5,6 +5,7 @@ import appHandler from './_base/app.js'
 import backupHandler from './_base/backup.js'
 import dictHandler from './_base/dict.js'
 import keepaliveHandler from './_base/keepalive.js'
+import notificationHandler from './_base/notification.js'
 import sealHandler from './_base/seal.js'
 import storageHandler from './_base/storage.js'
 import translateHandler from './_base/translate.js'
@@ -78,6 +79,14 @@ export default async function masterHandler(req, res) {
 					}
 
 					return res.status(404).json({ error: `base 基础网关拦截: 未识别或未挂载的业务模块 '${subModule}'` })
+
+				case 'admin':
+					// 后台公共能力：当前挂载全局消息通知中心
+					const adminModule = fullAction[1]
+					if (adminModule === 'notification') {
+						return await notificationHandler(req, res)
+					}
+					return res.status(404).json({ error: `admin 后台网关拦截: 未识别或未挂载的管理模块 '${adminModule}'` })
 
 				case 'cards':
 					return await cardsHandler(req, res)

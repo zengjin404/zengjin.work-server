@@ -29,8 +29,6 @@ CREATE TABLE IF NOT EXISTS cards_item (
     en_label       VARCHAR(100) DEFAULT '',
     description    VARCHAR(255) DEFAULT '',
     knowledge      VARCHAR(500) DEFAULT '',
-    render_type    VARCHAR(10) NOT NULL DEFAULT 'image',
-    render_config  JSONB NOT NULL DEFAULT '{}'::jsonb,
     play_modes     VARCHAR(50) NOT NULL DEFAULT 'recognize,connect,memory',
     sort_order     INT DEFAULT 0,
     is_enabled     BOOLEAN NOT NULL DEFAULT true,

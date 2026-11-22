@@ -2,7 +2,8 @@
  * api_util/cards_seed.js 种子完整性测试
  *
  * 目标：内容数据是「可真实体验」的交付物，不是随手写的假数据。
- * 任何新增卡片都必须通过：分类存在、card_key 合法且唯一、中文卡有拼音、渲染配置为对象。
+ * 任何新增卡片都必须通过：分类存在、card_key 合法且唯一、中文卡有拼音；
+ * 图片 / 图标只允许后台素材录入，种子不得携带前端渲染配置。
  */
 import { describe, expect, it } from 'vitest'
 
@@ -21,15 +22,13 @@ describe('cards_seed — 初始内容', () => {
 		expect(seed_items).toHaveLength(110)
 	})
 
-	it('8 个生活认知分类各 6 张插画卡', () => {
+	it('8 个生活认知分类各 6 张卡片', () => {
 		const lifeCodes = ['animal', 'fruit', 'vegetable', 'vehicle', 'food', 'life', 'toy', 'nature']
 		for (const code of lifeCodes) {
-			const list = seed_items.filter(item => item.category_code === code)
-			expect(list, code).toHaveLength(6)
 			expect(
-				list.every(item => item.render_config.kind === 'illustration' && item.render_config.key === item.card_key),
+				seed_items.filter(item => item.category_code === code),
 				code,
-			).toBe(true)
+			).toHaveLength(6)
 		}
 	})
 
@@ -48,12 +47,12 @@ describe('cards_seed — 初始内容', () => {
 	})
 
 	it('生活卡拼音与英文不缺失', () => {
-		const lifeItems = seed_items.filter(item => item.render_config.kind === 'illustration')
+		const lifeCodes = new Set(['animal', 'fruit', 'vegetable', 'vehicle', 'food', 'life', 'toy', 'nature'])
+		const lifeItems = seed_items.filter(item => lifeCodes.has(item.category_code))
 		expect(lifeItems.every(item => item.pinyin && item.en_label)).toBe(true)
 	})
 
-	it('渲染配置只使用受支持的 kind', () => {
-		const allowed = new Set(['illustration', 'number', 'letter', 'color', 'shape', 'size'])
-		expect(seed_items.every(item => allowed.has(item.render_config.kind))).toBe(true)
+	it('种子不携带前端渲染字段，视觉只能来自后台素材', () => {
+		expect(seed_items.every(item => !('render_config' in item) && !('render_type' in item))).toBe(true)
 	})
 })

@@ -1,5 +1,6 @@
 import { requireAdmin, requireAuth, verifyAuth } from '#api_util/auth_middleware.js'
 import base from '#api_util/base.js'
+import { resolve_cards_content_gaps_async } from '#api_util/cards_gap.js'
 import {
 	CardsPayloadError,
 	sanitize_assets,
@@ -12,6 +13,7 @@ import {
 	sanitize_play_payload,
 	sanitize_progress_payload,
 	sanitize_text,
+	suggest_card_key,
 } from '#api_util/cards_schema.js'
 import { seed_categories, seed_items } from '#api_util/cards_seed.js'
 import db from '#api_util/db.js'
@@ -109,8 +111,6 @@ async function ensure_dbInitialized_async() {
 			en_label       VARCHAR(100) DEFAULT '',
 			description    VARCHAR(255) DEFAULT '',
 			knowledge      VARCHAR(500) DEFAULT '',
-			render_type    VARCHAR(10) NOT NULL DEFAULT 'image',
-			render_config  JSONB NOT NULL DEFAULT '{}'::jsonb,
 			play_modes     VARCHAR(50) NOT NULL DEFAULT 'recognize,connect,memory',
 			sort_order     INT DEFAULT 0,
 			is_enabled     BOOLEAN NOT NULL DEFAULT true,
@@ -250,8 +250,8 @@ async function ensure_dbInitialized_async() {
 			await db.query(
 				`INSERT INTO ${T_ITEM}
 					(id, card_key, category_id, label, pinyin, en_label, description, knowledge,
-					 render_type, render_config, play_modes, sort_order, is_enabled, publish_status, createtime)
-				 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb, $11, $12, true, 1, ${NOW_SQL})
+					 play_modes, sort_order, is_enabled, publish_status, createtime)
+				 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, true, 1, ${NOW_SQL})
 				 ON CONFLICT DO NOTHING`,
 				[
 					item.id,
@@ -262,8 +262,6 @@ async function ensure_dbInitialized_async() {
 					item.en_label,
 					item.description,
 					item.knowledge,
-					item.render_type,
-					JSON.stringify(item.render_config),
 					item.play_modes,
 					item.sort_order,
 				],
@@ -288,6 +286,19 @@ async function bump_version_async(kind = 'item') {
 	const columns = [...new Set(kinds.map(item => (item === 'category' ? 'category_version' : item === 'asset' ? 'asset_version' : 'item_version')))]
 	const increments = columns.map(column => `${column} = ${column} + 1`).join(', ')
 	await db.query(`UPDATE ${T_VERSION} SET version = version + 1, ${increments}, updatetime = ${NOW_SQL} WHERE id = 'cards'`)
+}
+
+/**
+ * 内容变化后触发缺口自动消警
+ *
+ * 内容保存已经成功，检查失败不能回滚或误报；失败只记录日志，通知保持原状态，等待下次检查。
+ */
+async function resolve_content_gaps_after_change_async(categoryIds, reason) {
+	try {
+		await resolve_cards_content_gaps_async({ categoryIds: categoryIds.filter(Boolean), reason })
+	} catch (error) {
+		console.error(`[cards] 内容缺口自动检查失败 (${reason}):`, error.message)
+	}
 }
 
 /** 读取某用户的全部进度 */
@@ -339,7 +350,7 @@ routes['get:cards_content:bootstrap'] = async ({ query }) => {
 		),
 		db.query(
 			`SELECT i.id, i.card_key, i.category_id, c.code AS category_code, i.label, i.pinyin, i.en_label,
-			        i.description, i.knowledge, i.render_type, i.render_config, i.play_modes, i.sort_order
+			        i.description, i.knowledge, i.play_modes, i.sort_order
 			 FROM ${T_ITEM} i
 			 JOIN ${T_CATEGORY} c ON c.id = i.category_id
 			 WHERE i.publish_status = 1 AND i.is_enabled = true AND c.publish_status = 1 AND c.is_enabled = true
@@ -645,6 +656,8 @@ routes['post:cards_admin_category:update'] = requireAdmin(async ({ body }) => {
 		throw error
 	}
 	await bump_version_async('category')
+	// 分类发布 / 启用 / 名称等变化都可能让原缺口恢复或失效
+	await resolve_content_gaps_after_change_async([id], 'category_updated')
 	return base.respSuccess({ msg: '编辑成功', data: id })
 })
 
@@ -748,17 +761,20 @@ routes['get:cards_admin_item:detail'] = requireAdmin(async ({ query }) => {
 
 // POST /api/cards/admin/item/insert
 routes['post:cards_admin_item:insert'] = requireAdmin(async ({ body }) => {
-	const payload = sanitize_item_payload(body)
+	const category = await read_category_async(body.category_id)
+	if (!category) return base.respFailure({ msg: '所属分类不存在' })
+	const providedKey = sanitize_text(body.card_key, 60, '卡片标识').toLowerCase()
+	const cardKey = providedKey || (await unique_card_key_async(suggest_card_key(category.code, body)))
+	const payload = sanitize_item_payload({ ...body, card_key: cardKey })
 	const assets = sanitize_assets(body.assets)
-	await assert_category_exists(payload.category_id)
 
 	const id = base.getId()
 	try {
 		await db.query(
 			`INSERT INTO ${T_ITEM}
 				(id, card_key, category_id, label, pinyin, en_label, description, knowledge,
-				 render_type, render_config, play_modes, sort_order, is_enabled, publish_status, createtime)
-			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb, $11, $12, $13, $14, ${NOW_SQL})`,
+				 play_modes, sort_order, is_enabled, publish_status, createtime)
+			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, ${NOW_SQL})`,
 			[
 				id,
 				payload.card_key,
@@ -768,8 +784,6 @@ routes['post:cards_admin_item:insert'] = requireAdmin(async ({ body }) => {
 				payload.en_label,
 				payload.description,
 				payload.knowledge,
-				payload.render_type,
-				JSON.stringify(payload.render_config),
 				payload.play_modes,
 				payload.sort_order,
 				payload.is_enabled,
@@ -783,6 +797,7 @@ routes['post:cards_admin_item:insert'] = requireAdmin(async ({ body }) => {
 
 	if (assets?.length) await insert_assets_async(id, assets)
 	await bump_version_async(assets?.length ? ['item', 'asset'] : 'item')
+	await resolve_content_gaps_after_change_async([payload.category_id], 'item_inserted')
 	return base.respSuccess({ msg: '新增成功', data: id })
 })
 
@@ -794,12 +809,16 @@ routes['post:cards_admin_item:update'] = requireAdmin(async ({ body }) => {
 	const assets = sanitize_assets(body.assets)
 	if (payload.category_id) await assert_category_exists(payload.category_id)
 
+	// 记录修改前的分类：卡片在分类之间移动时，原分类与新分类都要重新检查缺口
+	const beforeRes = await db.query(`SELECT category_id FROM ${T_ITEM} WHERE id = $1`, [id])
+	const beforeCategoryId = beforeRes.rows?.[0]?.category_id || ''
+
 	const fields = Object.keys(payload)
 	const updates = []
 	const binds = []
 	for (const field of fields) {
 		binds.push(payload[field])
-		updates.push(field === 'render_config' ? `${field} = $${binds.length}::jsonb` : `${field} = $${binds.length}`)
+		updates.push(`${field} = ${binds.length}`)
 	}
 	if (updates.length) {
 		binds.push(base.getTime())
@@ -820,6 +839,7 @@ routes['post:cards_admin_item:update'] = requireAdmin(async ({ body }) => {
 
 	if (!updates.length && !assets) return base.respFailure({ msg: '没有可更新的字段' })
 	await bump_version_async(assets ? ['item', 'asset'] : 'item')
+	await resolve_content_gaps_after_change_async([beforeCategoryId, payload.category_id], 'item_updated')
 	return base.respSuccess({ msg: '编辑成功', data: id })
 })
 
@@ -828,9 +848,12 @@ routes['post:cards_admin_item:delete'] = requireAdmin(async ({ body }) => {
 	const id = sanitize_text(body.id, 20, '卡片 id')
 	if (!id) return base.respFailure({ msg: 'id 参数缺失' })
 	// 用户进度按 card_key 保存，卡片删除不会连带删除历史进度
+	const beforeRes = await db.query(`SELECT category_id FROM ${T_ITEM} WHERE id = $1`, [id])
+	const beforeCategoryId = beforeRes.rows?.[0]?.category_id || ''
 	await db.query(`DELETE FROM ${T_ASSET} WHERE card_id = $1`, [id])
 	await db.query(`DELETE FROM ${T_ITEM} WHERE id = $1`, [id])
 	await bump_version_async('item')
+	await resolve_content_gaps_after_change_async([beforeCategoryId], 'item_deleted')
 	return base.respSuccess({ msg: '删除成功', data: id })
 })
 
@@ -851,8 +874,8 @@ routes['post:cards_admin_item:duplicate'] = requireAdmin(async ({ body }) => {
 		await db.query(
 			`INSERT INTO ${T_ITEM}
 				(id, card_key, category_id, label, pinyin, en_label, description, knowledge,
-				 render_type, render_config, play_modes, sort_order, is_enabled, publish_status, createtime)
-			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb, $11, $12, false, 0, ${NOW_SQL})`,
+				 play_modes, sort_order, is_enabled, publish_status, createtime)
+			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, false, 0, ${NOW_SQL})`,
 			[
 				newId,
 				cardKey,
@@ -862,8 +885,6 @@ routes['post:cards_admin_item:duplicate'] = requireAdmin(async ({ body }) => {
 				source.en_label,
 				source.description,
 				source.knowledge,
-				source.render_type,
-				typeof source.render_config === 'string' ? source.render_config : JSON.stringify(source.render_config || {}),
 				source.play_modes,
 				(source.sort_order || 0) + 1,
 			],
@@ -903,12 +924,32 @@ routes['post:cards_admin_item:duplicate'] = requireAdmin(async ({ body }) => {
 	}
 
 	await bump_version_async('item')
+	await resolve_content_gaps_after_change_async([source.category_id], 'item_duplicated')
 	return base.respSuccess({ msg: '复制成功，副本为草稿状态', data: newId })
 })
 
+async function read_category_async(categoryId) {
+	const id = sanitize_text(categoryId, 20, '所属分类')
+	if (!id) return null
+	const { rows } = await db.query(`SELECT id, code FROM ${T_CATEGORY} WHERE id = $1`, [id])
+	return rows?.[0] || null
+}
+
 async function assert_category_exists(categoryId) {
-	const { rows } = await db.query(`SELECT id FROM ${T_CATEGORY} WHERE id = $1`, [categoryId])
-	if (!rows?.length) throw new CardsPayloadError('所属分类不存在')
+	const category = await read_category_async(categoryId)
+	if (!category) throw new CardsPayloadError('所属分类不存在')
+	return category
+}
+
+/** 自动生成 card_key 时避免与现有卡片冲突 */
+async function unique_card_key_async(baseKey) {
+	let key = baseKey
+	for (let i = 0; i < 8; i++) {
+		const { rows } = await db.query(`SELECT 1 FROM ${T_ITEM} WHERE card_key = $1 LIMIT 1`, [key])
+		if (!rows?.length) return key
+		key = `${baseKey.slice(0, 55)}_${base.getId().slice(-4)}`
+	}
+	return `${baseKey.slice(0, 52)}_${base.getId().slice(-8)}`
 }
 
 async function insert_assets_async(cardId, assets) {

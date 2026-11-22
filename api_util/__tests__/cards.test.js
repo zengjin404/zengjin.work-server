@@ -93,7 +93,6 @@ describe('cards 公开内容接口', () => {
 							card_key: 'animal_cat',
 							category_code: 'animal',
 							label: '猫',
-							render_config: { kind: 'illustration', key: 'animal_cat' },
 						},
 					],
 				}
@@ -250,6 +249,26 @@ describe('cards 管理端', () => {
 		expect(res.json.code).toBe(-1)
 		expect(res.json.msg).toContain('还有卡片')
 		expect(mockQuery.mock.calls.some(call => sqlOf(call).startsWith('DELETE FROM cards_category'))).toBe(false)
+	})
+
+	it('新增卡片未填 card_key 时自动生成并查重', async () => {
+		const handler = await load_cards()
+		rules.push((text, binds) => {
+			if (text.includes('SELECT id, code FROM cards_category WHERE id = $1')) return { rows: [{ id: 'cc_animal', code: 'animal' }] }
+			if (text.includes('SELECT 1 FROM cards_item WHERE card_key = $1')) return { rows: [], rowCount: 0 }
+			if (text.startsWith('INSERT INTO cards_item')) return { rows: [], rowCount: 1 }
+			return undefined
+		})
+
+		const res = await call_api(handler, '/api/cards/admin/item/insert', 'POST', {
+			headers: { Authorization: admin_token() },
+			body: { category_id: 'cc_animal', label: '兔子', en_label: 'rabbit', play_modes: ['recognize'] },
+		})
+
+		expect(res.json.code).toBe(0)
+		const insertCall = mockQuery.mock.calls.find(call => sqlOf(call).startsWith('INSERT INTO cards_item'))
+		expect(insertCall[1][1]).toBe('animal_rabbit')
+		expect(sqlOf(insertCall)).not.toContain('render_config')
 	})
 
 	it('编辑卡片时 assets 为全量替换（先删后插）', async () => {

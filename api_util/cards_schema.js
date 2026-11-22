@@ -25,7 +25,6 @@ export const OBJECT_ID_RE = /^[a-z0-9_-]{0,60}$/
 export const PLAY_MODES = ['recognize', 'connect', 'memory']
 export const ASSET_TYPES = ['image', 'thumbnail', 'narration', 'sound', 'emoji']
 export const EVENT_TYPES = ['hall_view', 'category_view', 'card_view', 'game_start', 'game_finish']
-export const RENDER_TYPES = ['image', 'svg', 'emoji']
 
 const MAX_FUTURE_MS = 5 * 60 * 1000
 
@@ -216,6 +215,26 @@ export function sanitize_assets(value) {
 	return sanitized
 }
 
+/**
+ * 根据分类与卡片文字生成稳定的 card_key 建议值
+ * 只作为创建时的默认值；显式传入的 card_key 仍优先，并保持创建后不可修改。
+ */
+export function suggest_card_key(categoryCode = '', payload = {}) {
+	const slug = value =>
+		String(value ?? '')
+			.normalize('NFD')
+			.replace(/\p{M}/gu, '')
+			.toLowerCase()
+			.replace(/[^a-z0-9]+/g, '_')
+			.replace(/^_+|_+$/g, '')
+
+	const category = slug(categoryCode) || 'card'
+	const tail = [payload.en_label, payload.label, payload.pinyin].map(slug).find(Boolean) || 'card'
+	let key = `${category}_${tail}`.replace(/_+/g, '_').replace(/^_+|_+$/g, '')
+	if (!/^[a-z]/.test(key)) key = `card_${key}`
+	return key.slice(0, 50) || 'card'
+}
+
 /** 分类写入载荷 */
 export function sanitize_category_payload(body = {}, { partial = false } = {}) {
 	const payload = {}
@@ -264,12 +283,6 @@ export function sanitize_item_payload(body = {}, { partial = false } = {}) {
 	if (!partial || body.en_label !== undefined) payload.en_label = sanitize_text(body.en_label, 100, '英文名称')
 	if (!partial || body.description !== undefined) payload.description = sanitize_text(body.description, 255, '简短介绍')
 	if (!partial || body.knowledge !== undefined) payload.knowledge = sanitize_text(body.knowledge, 500, '小知识')
-	if (!partial || body.render_type !== undefined) {
-		const renderType = sanitize_text(body.render_type, 10, '展示类型')
-		if (!RENDER_TYPES.includes(renderType)) throw new CardsPayloadError('展示类型只能是 image 或 svg')
-		payload.render_type = renderType
-	}
-	if (!partial || body.render_config !== undefined) payload.render_config = sanitize_render_config(body.render_config)
 	if (!partial || body.play_modes !== undefined) {
 		const modes = Array.isArray(body.play_modes) ? body.play_modes : String(body.play_modes || '').split(',')
 		const clean = [...new Set(modes.map(mode => sanitize_text(mode, 20, '玩法').toLowerCase()).filter(Boolean))]
