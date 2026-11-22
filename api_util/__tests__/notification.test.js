@@ -26,7 +26,8 @@ beforeEach(() => {
 	mockQuery.mockReset()
 	db.query = (...args) => mockQuery(...args)
 
-	mockQuery.mockImplementation(async sql => {
+	mockQuery.mockImplementation(async (sql, binds) => {
+		console.log('SQL:', String(sql), binds)
 		const text = String(sql).trim()
 		if (text.startsWith('CREATE TABLE') || text.startsWith('CREATE INDEX')) return EMPTY
 		if (text.includes('INSERT INTO admin_notification_setting')) return EMPTY
@@ -78,6 +79,7 @@ describe('Admin 通知管理接口', () => {
 		})
 
 		const res = await call_api(handler, '/api/admin/notification/select?read=unread', 'GET', { headers: { authorization: admin_token() } })
+		console.log('DEBUG res:', res.json)
 		expect(res.json.code).toBe(0)
 		expect(res.json.total).toBe(1)
 		expect(res.json.data).toHaveLength(1)
@@ -139,7 +141,7 @@ describe('内容缺口公开上报', () => {
 	it('开关关闭时不创建通知', async () => {
 		const handler = await load_notification()
 		const res = await call_api(handler, '/api/admin/notification/report', 'POST', {
-			body: { appCode: 'cards', category: 'missing_resource', categoryCode: 'animal', playMode: 'connect', imageMode: 'fixed_image' },
+			body: { appCode: 'cards', category: 'missing_resource', categoryId: 'cc_animal', playMode: 'connect', imageMode: 'fixed_image' },
 		})
 
 		expect(res.json.code).toBe(0)
@@ -156,7 +158,7 @@ describe('内容缺口公开上报', () => {
 			if (text.includes('INSERT INTO admin_notification_setting')) return EMPTY
 			if (text.includes('SELECT value FROM admin_notification_setting')) return { rows: [{ value: true }] }
 			if (text.includes('INSERT INTO admin_notification_rate')) return { rows: [{ count: 1 }] }
-			if (text.includes('FROM cards_category') && text.includes('WHERE code = $1')) return { rows: [{ id: 'cc_animal', code: 'animal', name: '小动物' }] }
+			if (text.includes('FROM cards_category') && text.includes('WHERE id = $1')) return { rows: [{ id: 'cc_animal', code: 'animal', name: '小动物' }] }
 			if (text.includes('FROM cards_item i') && text.includes('SELECT i.id'))
 				return { rows: [{ id: 'ci1', card_key: 'cat', label: '猫', play_modes: 'connect', category_id: 'cc_animal' }] }
 			if (text.includes('FROM cards_asset a'))
@@ -165,7 +167,7 @@ describe('内容缺口公开上报', () => {
 		})
 
 		const res = await call_api(handler, '/api/admin/notification/report', 'POST', {
-			body: { appCode: 'cards', category: 'missing_resource', categoryCode: 'animal', playMode: 'connect', imageMode: 'fixed_image', dedupeKey: 'fake' },
+			body: { appCode: 'cards', category: 'missing_resource', categoryId: 'cc_animal', playMode: 'connect', imageMode: 'fixed_image', dedupeKey: 'fake' },
 		})
 
 		expect(res.json.code).toBe(0)
@@ -182,7 +184,7 @@ describe('内容缺口公开上报', () => {
 			if (text.includes('INSERT INTO admin_notification_setting')) return EMPTY
 			if (text.includes('SELECT value FROM admin_notification_setting')) return { rows: [{ value: true }] }
 			if (text.includes('INSERT INTO admin_notification_rate')) return { rows: [{ count: 1 }] }
-			if (text.includes('FROM cards_category') && text.includes('WHERE code = $1')) return { rows: [{ id: 'cc_animal', code: 'animal', name: '小动物' }] }
+			if (text.includes('FROM cards_category') && text.includes('WHERE id = $1')) return { rows: [{ id: 'cc_animal', code: 'animal', name: '小动物' }] }
 			if (text.includes('FROM cards_item i') && text.includes('SELECT i.id'))
 				return { rows: [{ id: 'ci1', card_key: 'cat', label: '猫', play_modes: 'connect', category_id: 'cc_animal' }] }
 			if (text.includes('FROM cards_asset a')) return { rows: [] }
@@ -196,7 +198,7 @@ describe('内容缺口公开上报', () => {
 			body: {
 				appCode: 'cards',
 				category: 'missing_resource',
-				categoryCode: 'animal',
+				categoryId: 'cc_animal',
 				playMode: 'connect',
 				imageMode: 'fixed_image',
 				// 以下字段必须被服务端忽略

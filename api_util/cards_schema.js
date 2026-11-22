@@ -19,8 +19,10 @@ export class CardsPayloadError extends Error {
 	}
 }
 
-export const CARD_KEY_RE = /^[a-z][a-z0-9_]{1,59}$/
-export const CATEGORY_CODE_RE = /^[a-z][a-z0-9_]{1,29}$/
+export const CARD_ID_RE = /^[a-zA-Z0-9_-]{1,40}$/
+export const CATEGORY_ID_RE = /^[a-zA-Z0-9_-]{1,30}$/
+export const CARD_KEY_RE = CARD_ID_RE
+export const CATEGORY_CODE_RE = CATEGORY_ID_RE
 export const OBJECT_ID_RE = /^[a-z0-9_-]{0,60}$/
 export const PLAY_MODES = ['recognize', 'connect', 'memory']
 export const ASSET_TYPES = ['image', 'thumbnail', 'narration', 'sound', 'emoji']
@@ -239,11 +241,6 @@ export function suggest_card_key(categoryCode = '', payload = {}) {
 export function sanitize_category_payload(body = {}, { partial = false } = {}) {
 	const payload = {}
 
-	if (!partial || body.code !== undefined) {
-		const code = sanitize_text(body.code, 30, '分类编码').toLowerCase()
-		if (!CATEGORY_CODE_RE.test(code)) throw new CardsPayloadError('分类编码只能使用小写字母、数字和下划线，且以字母开头')
-		payload.code = code
-	}
 	if (!partial || body.name !== undefined) {
 		const name = sanitize_text(body.name, 50, '分类名称')
 		if (!name) throw new CardsPayloadError('分类名称不能为空')
@@ -264,11 +261,6 @@ export function sanitize_category_payload(body = {}, { partial = false } = {}) {
 export function sanitize_item_payload(body = {}, { partial = false } = {}) {
 	const payload = {}
 
-	if (!partial || body.card_key !== undefined) {
-		const cardKey = sanitize_text(body.card_key, 60, '卡片标识').toLowerCase()
-		if (!CARD_KEY_RE.test(cardKey)) throw new CardsPayloadError('卡片标识只能使用小写字母、数字和下划线，且以字母开头')
-		payload.card_key = cardKey
-	}
 	if (!partial || body.category_id !== undefined) {
 		const categoryId = sanitize_text(body.category_id, 20, '所属分类')
 		if (!categoryId) throw new CardsPayloadError('所属分类不能为空')
@@ -299,7 +291,7 @@ export function sanitize_item_payload(body = {}, { partial = false } = {}) {
 
 /**
  * 进度同步载荷
- * 返回 [{ cardKey, exploredAt, lastExploredAt }]，同 key 去重时取最早 / 最晚
+ * 返回 [{ cardId, exploredAt, lastExploredAt }]，同 id 去重时取最早 / 最晚
  */
 export function sanitize_progress_payload(body = {}) {
 	const list = body?.items
@@ -308,8 +300,8 @@ export function sanitize_progress_payload(body = {}) {
 
 	const merged = new Map()
 	for (const raw of list) {
-		const cardKey = sanitize_text(raw?.cardKey ?? raw?.card_key, 60, '卡片标识').toLowerCase()
-		if (!CARD_KEY_RE.test(cardKey)) throw new CardsPayloadError(`卡片标识不合法: ${cardKey || '空'}`)
+		const cardId = sanitize_text(raw?.cardId ?? raw?.card_id ?? raw?.cardKey ?? raw?.card_key, 40, '卡片标识')
+		if (!CARD_ID_RE.test(cardId)) throw new CardsPayloadError(`卡片标识不合法: ${cardId || '空'}`)
 
 		let exploredAt = sanitize_timestamp(raw?.exploredAt ?? raw?.explored_at, '首次探索时间')
 		let lastExploredAt = sanitize_timestamp(raw?.lastExploredAt ?? raw?.last_explored_at, '最近探索时间')
@@ -318,9 +310,9 @@ export function sanitize_progress_payload(body = {}) {
 		if (!lastExploredAt) lastExploredAt = exploredAt
 		if (dayjs(lastExploredAt).isBefore(dayjs(exploredAt))) exploredAt = lastExploredAt
 
-		const exist = merged.get(cardKey)
+		const exist = merged.get(cardId)
 		if (!exist) {
-			merged.set(cardKey, { cardKey, exploredAt, lastExploredAt })
+			merged.set(cardId, { cardId, cardKey: cardId, exploredAt, lastExploredAt })
 		} else {
 			if (dayjs(exploredAt).isBefore(dayjs(exist.exploredAt))) exist.exploredAt = exploredAt
 			if (dayjs(lastExploredAt).isAfter(dayjs(exist.lastExploredAt))) exist.lastExploredAt = lastExploredAt
@@ -331,10 +323,10 @@ export function sanitize_progress_payload(body = {}) {
 
 /** 收藏 / 取消收藏载荷 */
 export function sanitize_favorite_payload(body = {}) {
-	const cardKey = sanitize_text(body.cardKey ?? body.card_key, 60, '卡片标识').toLowerCase()
-	if (!CARD_KEY_RE.test(cardKey)) throw new CardsPayloadError('卡片标识不合法')
+	const cardId = sanitize_text(body.cardId ?? body.card_id ?? body.cardKey ?? body.card_key, 40, '卡片ID')
+	if (!CARD_ID_RE.test(cardId)) throw new CardsPayloadError('卡片ID不合法')
 	if (typeof body.favorite !== 'boolean') throw new CardsPayloadError('favorite 必须是布尔值')
-	return { cardKey, favorite: body.favorite }
+	return { cardId, cardKey: cardId, favorite: body.favorite }
 }
 
 /** 对局完成载荷 */

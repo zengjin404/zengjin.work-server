@@ -68,7 +68,7 @@ describe('cards_schema — 进度', () => {
 				{ cardKey: 'animal_cat', exploredAt: '2026-11-01 08:00:00', lastExploredAt: '2026-11-05 10:00:00' },
 			],
 		})
-		expect(list).toEqual([{ cardKey: 'animal_cat', exploredAt: '2026-11-01 08:00:00', lastExploredAt: '2026-11-05 10:00:00' }])
+		expect(list).toEqual([{ cardId: 'animal_cat', cardKey: 'animal_cat', exploredAt: '2026-11-01 08:00:00', lastExploredAt: '2026-11-05 10:00:00' }])
 	})
 
 	it('拒绝非法 cardKey 与超量批次', () => {
@@ -115,7 +115,7 @@ describe('cards_schema — 渲染配置与素材', () => {
 	it('事件与收藏只接受白名单值', () => {
 		expect(sanitize_event_payload({ events: [{ type: 'card_view', objectId: 'animal_cat' }] })).toEqual([{ type: 'card_view', objectId: 'animal_cat' }])
 		expect(() => sanitize_event_payload({ events: [{ type: 'click_child', objectId: '' }] })).toThrow('统计事件类型不支持')
-		expect(sanitize_favorite_payload({ cardKey: 'animal_cat', favorite: true })).toEqual({ cardKey: 'animal_cat', favorite: true })
+		expect(sanitize_favorite_payload({ cardKey: 'animal_cat', favorite: true })).toEqual({ cardId: 'animal_cat', cardKey: 'animal_cat', favorite: true })
 		expect(() => sanitize_favorite_payload({ cardKey: 'animal_cat', favorite: 'yes' })).toThrow('布尔值')
 	})
 })

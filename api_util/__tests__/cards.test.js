@@ -13,6 +13,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { generateAccessToken } from '#api_util/jwt.js'
+import { seed_categories } from '#api_util/cards_seed.js'
 
 const db = (await import('#api_util/db.js')).default
 const mockQuery = vi.fn()
@@ -84,8 +85,8 @@ describe('cards 公开内容接口', () => {
 	it('版本变化时返回已发布分类、卡片与素材', async () => {
 		const handler = await load_cards()
 		rules.push(text => {
-			if (text.includes('SELECT c.id, c.code, c.name')) return { rows: [{ id: 'cc_animal', code: 'animal', name: '小动物', item_count: '6' }] }
-			if (text.includes('SELECT i.id, i.card_key, i.category_id')) {
+			if (text.includes('SELECT c.id, c.name')) return { rows: [{ id: 'cc_animal', name: '小动物', item_count: '6' }] }
+			if (text.includes('SELECT i.id, i.category_id')) {
 				return {
 					rows: [
 						{
@@ -127,11 +128,11 @@ describe('cards 公开内容接口', () => {
 
 		const categoryInserts = mockQuery.mock.calls.filter(call => sqlOf(call).includes('INSERT INTO cards_category'))
 		const itemInserts = mockQuery.mock.calls.filter(call => sqlOf(call).includes('INSERT INTO cards_item'))
-		expect(categoryInserts.length).toBe(13)
-		expect(itemInserts.length).toBe(110)
+		expect(categoryInserts.length).toBe(9)
+		expect(itemInserts.length).toBe(129)
 		expect(sqlOf(categoryInserts[0])).toContain('ON CONFLICT DO NOTHING')
 		expect(sqlOf(itemInserts[0])).toContain('ON CONFLICT DO NOTHING')
-		expect(itemInserts[0][1][1]).toBe('animal_cat')
+		expect(itemInserts[0][1][1]).toBe(seed_categories[0].id)
 		// 种子完成后写标记，避免管理员删除的内容被「数量不足」逻辑复活
 		const seedUpdate = mockQuery.mock.calls.find(call => sqlOf(call).includes('SET seed_version = 1'))
 		expect(seedUpdate).toBeTruthy()
@@ -160,8 +161,8 @@ describe('cards 用户进度', () => {
 		const handler = await load_cards()
 		rules.push(text => {
 			if (text.includes('INSERT INTO cards_user_progress')) return { rows: [], rowCount: 1 }
-			if (text.includes('SELECT card_key, explored_at, last_explored_at, favorite_at')) {
-				return { rows: [{ card_key: 'animal_cat', explored_at: '2026-11-01 09:00:00', last_explored_at: '2026-11-02 09:00:00', favorite_at: null }] }
+			if (text.includes('SELECT card_id, explored_at, last_explored_at, favorite_at') || text.includes('SELECT card_key')) {
+				return { rows: [{ card_id: 'animal_cat', explored_at: '2026-11-01 09:00:00', last_explored_at: '2026-11-02 09:00:00', favorite_at: null }] }
 			}
 			return undefined
 		})
@@ -228,7 +229,6 @@ describe('cards 管理端', () => {
 
 		expect(res.json.code).toBe(0)
 		const insert = mockQuery.mock.calls.find(call => sqlOf(call).includes('INSERT INTO cards_category'))
-		expect(insert[1]).toContain('test_cat')
 		expect(insert[1]).toContain('测试分类')
 		const version = mockQuery.mock.calls.find(call => sqlOf(call).includes('UPDATE cards_content_version'))
 		expect(sqlOf(version)).toContain('category_version = category_version + 1')
@@ -251,11 +251,10 @@ describe('cards 管理端', () => {
 		expect(mockQuery.mock.calls.some(call => sqlOf(call).startsWith('DELETE FROM cards_category'))).toBe(false)
 	})
 
-	it('新增卡片未填 card_key 时自动生成并查重', async () => {
+	it('新增卡片保存基本信息与适用玩法', async () => {
 		const handler = await load_cards()
 		rules.push((text, binds) => {
-			if (text.includes('SELECT id, code FROM cards_category WHERE id = $1')) return { rows: [{ id: 'cc_animal', code: 'animal' }] }
-			if (text.includes('SELECT 1 FROM cards_item WHERE card_key = $1')) return { rows: [], rowCount: 0 }
+			if (text.includes('SELECT id, name FROM cards_category WHERE id = ')) return { rows: [{ id: 'cc_animal', name: '小动物' }] }
 			if (text.startsWith('INSERT INTO cards_item')) return { rows: [], rowCount: 1 }
 			return undefined
 		})
@@ -267,7 +266,7 @@ describe('cards 管理端', () => {
 
 		expect(res.json.code).toBe(0)
 		const insertCall = mockQuery.mock.calls.find(call => sqlOf(call).startsWith('INSERT INTO cards_item'))
-		expect(insertCall[1][1]).toBe('animal_rabbit')
+		expect(insertCall[1][1]).toBe('cc_animal')
 		expect(sqlOf(insertCall)).not.toContain('render_config')
 	})
 

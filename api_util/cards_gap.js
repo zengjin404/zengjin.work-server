@@ -225,14 +225,14 @@ export async function evaluate_cards_content_gap_async({ categoryId = '', playMo
 }
 
 /** 读取公开可见分类（只允许已发布且启用的分类） */
-async function read_public_category_async(categoryCode) {
-	if (!categoryCode) return { id: '', code: '', name: '' }
+async function read_public_category_async(categoryId) {
+	if (!categoryId) return { id: '', name: '' }
 	const { rows } = await db.query(
-		`SELECT id, code, name
+		`SELECT id, name
 		 FROM cards_category
-		 WHERE code = $1 AND publish_status = 1 AND is_enabled = true
+		 WHERE id = $1 AND publish_status = 1 AND is_enabled = true
 		 LIMIT 1`,
-		[categoryCode],
+		[categoryId],
 	)
 	return rows?.[0] || null
 }
@@ -270,8 +270,9 @@ export async function report_cards_content_gap_async(req, body = {}) {
 	}
 
 	const payload = sanitize_gap_report_payload(body)
-	const category = await read_public_category_async(payload.categoryCode)
-	if (payload.categoryCode && !category) throw new NotificationPayloadError('分类不存在或未发布')
+	const targetCategoryId = payload.categoryId || payload.categoryCode || ''
+	const category = await read_public_category_async(targetCategoryId)
+	if (targetCategoryId && !category) throw new NotificationPayloadError('分类不存在或未发布')
 
 	const evaluation = await evaluate_cards_content_gap_async({
 		categoryId: category?.id || '',
@@ -306,7 +307,6 @@ export async function report_cards_content_gap_async(req, body = {}) {
 		dedupeKey,
 		metadata: {
 			categoryId: category?.id || '',
-			categoryCode: category?.code || '',
 			categoryName: category?.name || '',
 			playMode: payload.playMode,
 			imageMode: payload.imageMode,

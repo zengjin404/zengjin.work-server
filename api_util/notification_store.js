@@ -1,5 +1,6 @@
 import base from '#api_util/base.js'
 import db from '#api_util/db.js'
+import { publish_message_ws } from '#api_util/ws.js'
 
 /**
  * Admin 全局消息通知中心 —— 存储与生命周期
@@ -117,11 +118,82 @@ export async function upsert_notification_async({ appCode, category, severity = 
 	)
 
 	const row = rows?.[0] || {}
-	return {
+	const result = {
 		id: row.id || '',
 		status: row.status || 'pending',
 		occurrenceCount: Number(row.occurrence_count) || 1,
 		created: Boolean(row.created),
+	}
+
+	push_notification_ws_async({
+		id: result.id,
+		appCode,
+		category,
+		severity,
+		title: title.slice(0, 128),
+		content,
+		occurrenceCount: result.occurrenceCount,
+		created: result.created,
+	}).catch(() => {})
+
+	return result
+}
+
+/** WebSocket 实时推送给管理员 */
+export async function push_notification_ws_async(notice) {
+	try {
+		const payload = {
+			app: '$base',
+			type: 'admin_notification',
+			data: {
+				id: notice.id,
+				appCode: notice.appCode,
+				category: notice.category,
+				severity: notice.severity,
+				title: notice.title,
+				content: notice.content,
+				occurrenceCount: notice.occurrenceCount,
+				created: notice.created,
+				timestamp: Date.now(),
+			},
+		}
+
+		// 1. 广播到 admin_notification 频道
+		await publish_message_ws('admin_notification', payload).catch(err => {
+			console.warn('[WS Push] 广播到 admin_notification 失败:', err?.message || err)
+		})
+
+		// 2. 推送到管理员个人专属频道 (user_${adminId})：覆盖内置 admin 以及站长 zengjin
+		const { rows } = await db.query("SELECT id FROM base_user WHERE username = 'admin' OR username = 'zengjin'")
+		for (const u of rows || []) {
+			if (u.id) {
+				await publish_message_ws(`user_${u.id}`, payload).catch(err => {
+					console.warn(`[WS Push] 推送到 user_${u.id} 失败:`, err?.message || err)
+				})
+			}
+		}
+	} catch (e) {
+		console.error('[notification_ws] 推送异常:', e?.message || e)
+	}
+}
+
+/** 解决通知后的实时推送 */
+export async function push_notification_resolved_ws_async(id) {
+	try {
+		const payload = {
+			app: '$base',
+			type: 'admin_notification_resolved',
+			data: { id, timestamp: Date.now() },
+		}
+		await publish_message_ws('admin_notification', payload).catch(() => {})
+		const { rows } = await db.query("SELECT id FROM base_user WHERE username = 'admin' OR username = 'zengjin'")
+		for (const u of rows || []) {
+			if (u.id) {
+				await publish_message_ws(`user_${u.id}`, payload).catch(() => {})
+			}
+		}
+	} catch (e) {
+		console.error('[notification_ws_resolve] 推送异常:', e?.message || e)
 	}
 }
 
@@ -134,6 +206,9 @@ export async function resolve_notification_async(id) {
 		 RETURNING id`,
 		[id],
 	)
+	if (rows?.length) {
+		push_notification_resolved_ws_async(id).catch(() => {})
+	}
 	return Boolean(rows?.length)
 }
 
@@ -232,6 +307,9 @@ export async function mark_notifications_read_async(ids = []) {
 		)
 		if (rows?.length) updated++
 	}
+	if (updated > 0) {
+		push_notification_resolved_ws_async('read').catch(() => {})
+	}
 	return updated
 }
 
@@ -242,7 +320,11 @@ export async function mark_all_notifications_read_async() {
 		 SET read_at = ${NOW_SQL}, updatetime = ${NOW_SQL}
 		 WHERE read_at IS NULL`,
 	)
-	return Number(rowCount) || 0
+	const updated = Number(rowCount) || 0
+	if (updated > 0) {
+		push_notification_resolved_ws_async('read_all').catch(() => {})
+	}
+	return updated
 }
 
 /** 修改处理状态（阅读状态独立，不受影响） */
@@ -256,6 +338,9 @@ export async function set_notification_status_async(id, status) {
 		 RETURNING id, status, resolved_at`,
 		[id, status],
 	)
+	if (rows?.length && status === 'resolved') {
+		push_notification_resolved_ws_async(id).catch(() => {})
+	}
 	return rows?.[0] || null
 }
 

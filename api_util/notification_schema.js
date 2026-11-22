@@ -84,10 +84,13 @@ export function sanitize_gap_report_payload(body = {}) {
 	const imageMode = sanitize_enum(body.imageMode ?? body.image_mode, CARDS_IMAGE_MODES, '认知模式')
 	if (!imageMode) throw new NotificationPayloadError('缺少认知模式')
 
-	const categoryCode = sanitize_notification_text(body.categoryCode ?? body.category_code, 30, '分类编码').toLowerCase()
-	if (categoryCode && !CATEGORY_CODE_RE.test(categoryCode)) throw new NotificationPayloadError('分类编码不合法')
+	const categoryId = sanitize_notification_text(
+		body.categoryId ?? body.category_id ?? body.categoryCode ?? body.category_code,
+		30,
+		'分类标识',
+	)
 
-	return { appCode, category, playMode, imageMode, categoryCode }
+	return { appCode, category, playMode, imageMode, categoryId, categoryCode: categoryId }
 }
 
 /** 管理端列表筛选参数 */

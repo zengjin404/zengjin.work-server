@@ -115,22 +115,30 @@ const actions = {
 			// 在线状态筛选逻辑
 			if (query.isOnline !== undefined && query.isOnline !== '') {
 				const isOnline = Number(query.isOnline)
-				// onlineIds 预期为以逗号分隔的字符串或数组
-				const onlineIds = (Array.isArray(query.onlineIds) ? query.onlineIds : (query.onlineIds || '').split(',')).filter(Boolean).map(Number)
+				// onlineIds 预期为以逗号分隔的字符串或数组（保持字符串ID，避免转Number导致12位36进制ID变成NaN）
+				const onlineIds = (Array.isArray(query.onlineIds) ? query.onlineIds : (query.onlineIds || '').split(','))
+					.map(id => String(id).trim())
+					.filter(Boolean)
 
 				if (isOnline === 1) {
-					// 仅查询在线用户：如果当前没人在线，直接返回空，否则使用 ANY
+					// 仅查询在线用户：如果当前没人在线，直接返回空，否则使用 IN
 					if (onlineIds.length === 0) {
 						wheres.push('1 = 0')
 					} else {
-						binds.push(onlineIds)
-						wheres.push(`id = ANY($${binds.length})`)
+						const placeholders = onlineIds.map(id => {
+							binds.push(id)
+							return `$${binds.length}`
+						}).join(',')
+						wheres.push(`id IN (${placeholders})`)
 					}
 				} else if (isOnline === 0) {
-					// 仅查询离线用户：如果有人在线，使用 NOT ANY
+					// 仅查询离线用户：如果有人在线，使用 NOT IN
 					if (onlineIds.length > 0) {
-						binds.push(onlineIds)
-						wheres.push(`NOT (id = ANY($${binds.length}))`)
+						const placeholders = onlineIds.map(id => {
+							binds.push(id)
+							return `$${binds.length}`
+						}).join(',')
+						wheres.push(`id NOT IN (${placeholders})`)
 					}
 				}
 			}

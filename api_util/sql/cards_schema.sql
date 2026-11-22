@@ -2,10 +2,10 @@
 -- 说明：这些表由 api/_cards.js 在首次请求时幂等自动创建；
 --       本脚本仅作为 DDL 文档与手动初始化参考（对齐 api_util/sql/fc_schema.sql 惯例）。
 -- 时间列统一为无时区 TIMESTAMP + 北京时间字面值。
+-- 标识体系定案：采用方案二彻底 ID 化，实体唯一身份统一使用主键 id，外键直接引用 id，不再冗余业务编码。
 
 CREATE TABLE IF NOT EXISTS cards_category (
     id             VARCHAR(20) PRIMARY KEY,
-    code           VARCHAR(50) NOT NULL,
     name           VARCHAR(50) NOT NULL,
     parent_id      VARCHAR(20) DEFAULT '',
     description    VARCHAR(255) DEFAULT '',
@@ -17,12 +17,10 @@ CREATE TABLE IF NOT EXISTS cards_category (
     createtime     TIMESTAMP NOT NULL DEFAULT (now() AT TIME ZONE 'Asia/Shanghai'),
     updatetime     TIMESTAMP
 );
-CREATE UNIQUE INDEX IF NOT EXISTS idx_cards_category_code ON cards_category (code);
 CREATE INDEX IF NOT EXISTS idx_cards_category_sort ON cards_category (publish_status, is_enabled, sort_order);
 
 CREATE TABLE IF NOT EXISTS cards_item (
     id             VARCHAR(20) PRIMARY KEY,
-    card_key       VARCHAR(60) NOT NULL,
     category_id    VARCHAR(20) NOT NULL,
     label          VARCHAR(50) NOT NULL,
     pinyin         VARCHAR(100) DEFAULT '',
@@ -36,7 +34,6 @@ CREATE TABLE IF NOT EXISTS cards_item (
     createtime     TIMESTAMP NOT NULL DEFAULT (now() AT TIME ZONE 'Asia/Shanghai'),
     updatetime     TIMESTAMP
 );
-CREATE UNIQUE INDEX IF NOT EXISTS idx_cards_item_key ON cards_item (card_key);
 CREATE INDEX IF NOT EXISTS idx_cards_item_category ON cards_item (category_id, sort_order);
 CREATE INDEX IF NOT EXISTS idx_cards_item_publish ON cards_item (publish_status, is_enabled);
 
@@ -59,14 +56,14 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_cards_asset_primary ON cards_asset (card_i
 CREATE TABLE IF NOT EXISTS cards_user_progress (
     id               VARCHAR(20) PRIMARY KEY,
     user_id          VARCHAR(40) NOT NULL,
-    card_key         VARCHAR(60) NOT NULL,
+    card_id          VARCHAR(20) NOT NULL,
     explored_at      TIMESTAMP,
     last_explored_at TIMESTAMP,
     favorite_at      TIMESTAMP,
     createtime       TIMESTAMP NOT NULL DEFAULT (now() AT TIME ZONE 'Asia/Shanghai'),
     updatetime       TIMESTAMP
 );
-CREATE UNIQUE INDEX IF NOT EXISTS idx_cards_progress_user_card ON cards_user_progress (user_id, card_key);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_cards_progress_user_card ON cards_user_progress (user_id, card_id);
 CREATE INDEX IF NOT EXISTS idx_cards_progress_user_time ON cards_user_progress (user_id, last_explored_at DESC);
 
 CREATE TABLE IF NOT EXISTS cards_play_record (
@@ -104,14 +101,11 @@ CREATE TABLE IF NOT EXISTS cards_user_setting (
 );
 
 CREATE TABLE IF NOT EXISTS cards_content_version (
-    id               VARCHAR(20) PRIMARY KEY,
-    version          BIGINT NOT NULL DEFAULT 1,
-    category_version BIGINT NOT NULL DEFAULT 1,
-    item_version     BIGINT NOT NULL DEFAULT 1,
-    asset_version    BIGINT NOT NULL DEFAULT 1,
+    id               VARCHAR(10) PRIMARY KEY,
+    version          INT NOT NULL DEFAULT 1,
+    category_version INT NOT NULL DEFAULT 1,
+    item_version     INT NOT NULL DEFAULT 1,
+    asset_version    INT NOT NULL DEFAULT 1,
     seed_version     INT NOT NULL DEFAULT 0,
-    updatetime       TIMESTAMP
+    updatetime       TIMESTAMP NOT NULL DEFAULT (now() AT TIME ZONE 'Asia/Shanghai')
 );
-INSERT INTO cards_content_version (id, version, category_version, item_version, asset_version, seed_version)
-VALUES ('cards', 1, 1, 1, 1, 0)
-ON CONFLICT (id) DO NOTHING;

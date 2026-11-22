@@ -13,7 +13,6 @@ import {
 	sanitize_play_payload,
 	sanitize_progress_payload,
 	sanitize_text,
-	suggest_card_key,
 } from '#api_util/cards_schema.js'
 import { seed_categories, seed_items } from '#api_util/cards_seed.js'
 import db from '#api_util/db.js'
@@ -85,7 +84,6 @@ async function ensure_dbInitialized_async() {
 	await db.query(`
 		CREATE TABLE IF NOT EXISTS ${T_CATEGORY} (
 			id             VARCHAR(20) PRIMARY KEY,
-			code           VARCHAR(50) NOT NULL,
 			name           VARCHAR(50) NOT NULL,
 			parent_id      VARCHAR(20) DEFAULT '',
 			description    VARCHAR(255) DEFAULT '',
@@ -98,13 +96,12 @@ async function ensure_dbInitialized_async() {
 			updatetime     TIMESTAMP
 		);
 	`)
-	await db.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_cards_category_code ON ${T_CATEGORY} (code)`)
+	await db.query(`DROP INDEX IF EXISTS idx_cards_category_code; ALTER TABLE ${T_CATEGORY} DROP COLUMN IF EXISTS code;`)
 	await db.query(`CREATE INDEX IF NOT EXISTS idx_cards_category_sort ON ${T_CATEGORY} (publish_status, is_enabled, sort_order)`)
 
 	await db.query(`
 		CREATE TABLE IF NOT EXISTS ${T_ITEM} (
 			id             VARCHAR(20) PRIMARY KEY,
-			card_key       VARCHAR(60) NOT NULL,
 			category_id    VARCHAR(20) NOT NULL,
 			label          VARCHAR(50) NOT NULL,
 			pinyin         VARCHAR(100) DEFAULT '',
@@ -119,7 +116,7 @@ async function ensure_dbInitialized_async() {
 			updatetime     TIMESTAMP
 		);
 	`)
-	await db.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_cards_item_key ON ${T_ITEM} (card_key)`)
+	await db.query(`DROP INDEX IF EXISTS idx_cards_item_key; ALTER TABLE ${T_ITEM} DROP COLUMN IF EXISTS card_key;`)
 	await db.query(`CREATE INDEX IF NOT EXISTS idx_cards_item_category ON ${T_ITEM} (category_id, sort_order)`)
 	await db.query(`CREATE INDEX IF NOT EXISTS idx_cards_item_publish ON ${T_ITEM} (publish_status, is_enabled)`)
 
@@ -142,7 +139,6 @@ async function ensure_dbInitialized_async() {
 	await db.query(`ALTER TABLE ${T_ASSET} ADD COLUMN IF NOT EXISTS is_enabled BOOLEAN NOT NULL DEFAULT true`)
 	await db.query(`ALTER TABLE ${T_ASSET} ADD COLUMN IF NOT EXISTS is_random BOOLEAN NOT NULL DEFAULT true`)
 	await db.query(`CREATE INDEX IF NOT EXISTS idx_cards_asset_card ON ${T_ASSET} (card_id, asset_type, sort_order)`)
-	// 历史数据可能在同一卡片上存在多条 is_primary；先按 (sort_order, id) 保留第一条，避免唯一索引创建失败
 	await db.query(`
 		UPDATE ${T_ASSET} a SET is_primary = false
 		WHERE a.is_primary = true
@@ -152,14 +148,13 @@ async function ensure_dbInitialized_async() {
 			  AND (b.sort_order, b.id) < (a.sort_order, a.id)
 		  )
 	`)
-	// 同一张卡片最多一个主图：服务端白名单之外再加一层数据库约束
 	await db.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_cards_asset_primary ON ${T_ASSET} (card_id) WHERE is_primary`)
 
 	await db.query(`
 		CREATE TABLE IF NOT EXISTS ${T_PROGRESS} (
 			id               VARCHAR(20) PRIMARY KEY,
 			user_id          VARCHAR(40) NOT NULL,
-			card_key         VARCHAR(60) NOT NULL,
+			card_id          VARCHAR(20) NOT NULL,
 			explored_at      TIMESTAMP,
 			last_explored_at TIMESTAMP,
 			favorite_at      TIMESTAMP,
@@ -167,7 +162,9 @@ async function ensure_dbInitialized_async() {
 			updatetime       TIMESTAMP
 		);
 	`)
-	await db.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_cards_progress_user_card ON ${T_PROGRESS} (user_id, card_key)`)
+	await db.query(
+		`ALTER TABLE ${T_PROGRESS} ADD COLUMN IF NOT EXISTS card_id VARCHAR(20); DROP INDEX IF EXISTS idx_cards_progress_user_card; CREATE UNIQUE INDEX IF NOT EXISTS idx_cards_progress_user_card ON ${T_PROGRESS} (user_id, card_id); ALTER TABLE ${T_PROGRESS} DROP COLUMN IF EXISTS card_key;`,
+	)
 	await db.query(`CREATE INDEX IF NOT EXISTS idx_cards_progress_user_time ON ${T_PROGRESS} (user_id, last_explored_at DESC)`)
 
 	await db.query(`
@@ -235,36 +232,21 @@ async function ensure_dbInitialized_async() {
 		for (const category of seed_categories) {
 			await db.query(
 				`INSERT INTO ${T_CATEGORY}
-					(id, code, name, parent_id, description, icon, theme_color, sort_order, is_enabled, publish_status, createtime)
-				 VALUES ($1, $2, $3, '', $4, $5, $6, $7, true, 1, ${NOW_SQL})
-				 ON CONFLICT DO NOTHING`,
-				[category.id, category.code, category.name, category.description, category.icon, category.theme_color, category.sort_order],
+						(id, name, parent_id, description, icon, theme_color, sort_order, is_enabled, publish_status, createtime)
+					 VALUES ($1, $2, '', $3, $4, $5, $6, true, 1, ${NOW_SQL})
+					 ON CONFLICT DO NOTHING`,
+				[category.id, category.name, category.description, category.icon, category.theme_color, category.sort_order],
 			)
 		}
 
-		// 分类 id 以数据库中的 code 映射为准，兼容管理员先手工建过同 code 分类的情况
-		const catRows = await db.query(`SELECT id, code FROM ${T_CATEGORY}`)
-		const catMap = new Map((catRows.rows || []).map(row => [row.code, row.id]))
 		for (const item of seed_items) {
-			const categoryId = catMap.get(item.category_code) || item.category_code
 			await db.query(
 				`INSERT INTO ${T_ITEM}
-					(id, card_key, category_id, label, pinyin, en_label, description, knowledge,
-					 play_modes, sort_order, is_enabled, publish_status, createtime)
-				 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, true, 1, ${NOW_SQL})
-				 ON CONFLICT DO NOTHING`,
-				[
-					item.id,
-					item.card_key,
-					categoryId,
-					item.label,
-					item.pinyin,
-					item.en_label,
-					item.description,
-					item.knowledge,
-					item.play_modes,
-					item.sort_order,
-				],
+						(id, category_id, label, pinyin, en_label, description, knowledge,
+						 play_modes, sort_order, is_enabled, publish_status, createtime)
+					 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, true, 1, ${NOW_SQL})
+					 ON CONFLICT DO NOTHING`,
+				[item.id, item.category_id, item.label, item.pinyin, item.en_label, item.description, item.knowledge, item.play_modes, item.sort_order],
 			)
 		}
 
@@ -304,14 +286,15 @@ async function resolve_content_gaps_after_change_async(categoryIds, reason) {
 /** 读取某用户的全部进度 */
 async function read_progress_async(userId) {
 	const { rows } = await db.query(
-		`SELECT card_key, explored_at, last_explored_at, favorite_at
+		`SELECT card_id, explored_at, last_explored_at, favorite_at
 		 FROM ${T_PROGRESS}
 		 WHERE user_id = $1
 		 ORDER BY last_explored_at DESC NULLS LAST, createtime DESC`,
 		[userId],
 	)
 	return base.formatDbRows(rows || []).map(row => ({
-		cardKey: row.card_key,
+		cardId: row.card_id,
+		cardKey: row.card_id,
 		exploredAt: row.explored_at || '',
 		lastExploredAt: row.last_explored_at || '',
 		favoriteAt: row.favorite_at || '',
@@ -341,7 +324,7 @@ routes['get:cards_content:bootstrap'] = async ({ query }) => {
 
 	const [categoryRes, itemRes, assetRes] = await Promise.all([
 		db.query(
-			`SELECT c.id, c.code, c.name, c.parent_id, c.description, c.icon, c.theme_color, c.sort_order,
+			`SELECT c.id, c.name, c.parent_id, c.description, c.icon, c.theme_color, c.sort_order,
 			        (SELECT COUNT(*) FROM ${T_ITEM} i
 			          WHERE i.category_id = c.id AND i.publish_status = 1 AND i.is_enabled = true) AS item_count
 			 FROM ${T_CATEGORY} c
@@ -349,7 +332,7 @@ routes['get:cards_content:bootstrap'] = async ({ query }) => {
 			 ORDER BY c.sort_order ASC, c.createtime ASC`,
 		),
 		db.query(
-			`SELECT i.id, i.card_key, i.category_id, c.code AS category_code, i.label, i.pinyin, i.en_label,
+			`SELECT i.id, i.category_id, i.label, i.pinyin, i.en_label,
 			        i.description, i.knowledge, i.play_modes, i.sort_order
 			 FROM ${T_ITEM} i
 			 JOIN ${T_CATEGORY} c ON c.id = i.category_id
@@ -357,7 +340,7 @@ routes['get:cards_content:bootstrap'] = async ({ query }) => {
 			 ORDER BY c.sort_order ASC, i.sort_order ASC, i.createtime ASC`,
 		),
 		db.query(
-			`SELECT a.id, a.card_id, i.card_key, a.asset_type, a.asset_url, a.mime_type, a.sort_order,
+			`SELECT a.id, a.card_id, a.asset_type, a.asset_url, a.mime_type, a.sort_order,
 			        COALESCE(a.is_primary, (a.metadata->>'is_primary')::boolean, false) AS is_primary,
 			        COALESCE(a.is_enabled, (a.metadata->>'is_enabled')::boolean, true) AS is_enabled,
 			        COALESCE(a.is_random, (a.metadata->>'is_random')::boolean, true) AS is_random,
@@ -406,13 +389,13 @@ routes['post:cards_progress:sync'] = requireAuth(async ({ req, body }) => {
 
 	for (const item of items) {
 		await db.query(
-			`INSERT INTO ${T_PROGRESS} (id, user_id, card_key, explored_at, last_explored_at, createtime, updatetime)
+			`INSERT INTO ${T_PROGRESS} (id, user_id, card_id, explored_at, last_explored_at, createtime, updatetime)
 			 VALUES ($1, $2, $3, $4::timestamp, $5::timestamp, ${NOW_SQL}, ${NOW_SQL})
-			 ON CONFLICT (user_id, card_key) DO UPDATE SET
+			 ON CONFLICT (user_id, card_id) DO UPDATE SET
 				explored_at = LEAST(${T_PROGRESS}.explored_at, EXCLUDED.explored_at),
 				last_explored_at = GREATEST(${T_PROGRESS}.last_explored_at, EXCLUDED.last_explored_at),
 				updatetime = ${NOW_SQL}`,
-			[base.getId(), userId, item.cardKey, item.exploredAt, item.lastExploredAt],
+			[base.getId(), userId, item.cardId || item.cardKey, item.exploredAt, item.lastExploredAt],
 		)
 	}
 
@@ -430,16 +413,16 @@ routes['get:cards_progress:list'] = requireAuth(async ({ req }) => {
 // POST /api/cards/progress/favorite
 routes['post:cards_progress:favorite'] = requireAuth(async ({ req, body }) => {
 	const userId = req.user?.userId
-	const { cardKey, favorite } = sanitize_favorite_payload(body)
+	const { cardId, favorite } = sanitize_favorite_payload(body)
 	await db.query(
-		`INSERT INTO ${T_PROGRESS} (id, user_id, card_key, favorite_at, createtime, updatetime)
-		 VALUES ($1, $2, $3, CASE WHEN $4::boolean THEN ${NOW_SQL} ELSE NULL END, ${NOW_SQL}, ${NOW_SQL})
-		 ON CONFLICT (user_id, card_key) DO UPDATE SET
-			favorite_at = CASE WHEN $4::boolean THEN ${NOW_SQL} ELSE NULL END,
-			updatetime = ${NOW_SQL}`,
-		[base.getId(), userId, cardKey, favorite],
+		`INSERT INTO ${T_PROGRESS} (id, user_id, card_id, favorite_at, createtime, updatetime)
+			 VALUES ($1, $2, $3, CASE WHEN $4::boolean THEN ${NOW_SQL} ELSE NULL END, ${NOW_SQL}, ${NOW_SQL})
+			 ON CONFLICT (user_id, card_id) DO UPDATE SET
+				favorite_at = CASE WHEN $4::boolean THEN ${NOW_SQL} ELSE NULL END,
+				updatetime = ${NOW_SQL}`,
+		[base.getId(), userId, cardId, favorite],
 	)
-	return base.respSuccess({ msg: favorite ? '已收藏' : '已取消收藏', data: { cardKey, favorite } })
+	return base.respSuccess({ msg: favorite ? '已收藏' : '已取消收藏', data: { cardId, cardKey: cardId, favorite } })
 })
 
 /* ==========================================================================
@@ -553,12 +536,12 @@ async function upsert_stats_async(events) {
 // GET /api/cards/admin/category/select
 routes['get:cards_admin_category:select'] = requireAdmin(async ({ query }) => {
 	const { page, size, offset } = read_page(query)
-	const keyword = sanitize_text(query.keyword ?? query.name ?? query.code, 50, '关键词')
+	const keyword = sanitize_text(query.keyword ?? query.name, 50, '关键词')
 	const wheres = []
 	const binds = []
 	if (keyword) {
 		binds.push(`%${keyword}%`)
-		wheres.push(`(c.name ILIKE $${binds.length} OR c.code ILIKE $${binds.length})`)
+		wheres.push(`c.name ILIKE ${binds.length}`)
 	}
 	const whereStr = wheres.length ? `WHERE ${wheres.join(' AND ')}` : ''
 
@@ -606,11 +589,10 @@ routes['post:cards_admin_category:insert'] = requireAdmin(async ({ body }) => {
 	try {
 		await db.query(
 			`INSERT INTO ${T_CATEGORY}
-				(id, code, name, parent_id, description, icon, theme_color, sort_order, is_enabled, publish_status, createtime)
-			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, ${NOW_SQL})`,
+					(id, name, parent_id, description, icon, theme_color, sort_order, is_enabled, publish_status, createtime)
+				 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, ${NOW_SQL})`,
 			[
 				id,
-				payload.code,
 				payload.name,
 				payload.parent_id,
 				payload.description,
@@ -696,7 +678,7 @@ routes['get:cards_admin_item:select'] = requireAdmin(async ({ query }) => {
 	const binds = []
 	if (keyword) {
 		binds.push(`%${keyword}%`)
-		wheres.push(`(i.label ILIKE $${binds.length} OR i.card_key ILIKE $${binds.length} OR i.pinyin ILIKE $${binds.length})`)
+		wheres.push(`(i.label ILIKE ${binds.length} OR i.pinyin ILIKE ${binds.length})`)
 	}
 	if (categoryId) {
 		binds.push(categoryId)
@@ -714,7 +696,7 @@ routes['get:cards_admin_item:select'] = requireAdmin(async ({ query }) => {
 
 	const [listRes, countRes] = await Promise.all([
 		db.query(
-			`SELECT i.*, c.name AS category_name, c.code AS category_code, c.sort_order AS category_sort
+			`SELECT i.*, c.name AS category_name, c.sort_order AS category_sort
 			 FROM ${T_ITEM} i
 			 LEFT JOIN ${T_CATEGORY} c ON c.id = i.category_id
 			 ${whereStr}
@@ -738,7 +720,7 @@ routes['get:cards_admin_item:detail'] = requireAdmin(async ({ query }) => {
 	if (!id) return base.respFailure({ msg: 'id 参数缺失' })
 	const [itemRes, assetRes] = await Promise.all([
 		db.query(
-			`SELECT i.*, c.name AS category_name, c.code AS category_code
+			`SELECT i.*, c.name AS category_name
 			 FROM ${T_ITEM} i LEFT JOIN ${T_CATEGORY} c ON c.id = i.category_id
 			 WHERE i.id = $1`,
 			[id],
@@ -763,21 +745,18 @@ routes['get:cards_admin_item:detail'] = requireAdmin(async ({ query }) => {
 routes['post:cards_admin_item:insert'] = requireAdmin(async ({ body }) => {
 	const category = await read_category_async(body.category_id)
 	if (!category) return base.respFailure({ msg: '所属分类不存在' })
-	const providedKey = sanitize_text(body.card_key, 60, '卡片标识').toLowerCase()
-	const cardKey = providedKey || (await unique_card_key_async(suggest_card_key(category.code, body)))
-	const payload = sanitize_item_payload({ ...body, card_key: cardKey })
+	const payload = sanitize_item_payload(body)
 	const assets = sanitize_assets(body.assets)
 
 	const id = base.getId()
 	try {
 		await db.query(
 			`INSERT INTO ${T_ITEM}
-				(id, card_key, category_id, label, pinyin, en_label, description, knowledge,
-				 play_modes, sort_order, is_enabled, publish_status, createtime)
-			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, ${NOW_SQL})`,
+					(id, category_id, label, pinyin, en_label, description, knowledge,
+					 play_modes, sort_order, is_enabled, publish_status, createtime)
+				 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, ${NOW_SQL})`,
 			[
 				id,
-				payload.card_key,
 				payload.category_id,
 				payload.label,
 				payload.pinyin,
@@ -867,18 +846,14 @@ routes['post:cards_admin_item:duplicate'] = requireAdmin(async ({ body }) => {
 	if (!source) return base.respFailure({ msg: '原卡片不存在' })
 
 	const newId = base.getId()
-	const suffix = base.getId().slice(-4)
-	const cardKey = `${String(source.card_key).slice(0, 54)}_${suffix}`
-
 	try {
 		await db.query(
 			`INSERT INTO ${T_ITEM}
-				(id, card_key, category_id, label, pinyin, en_label, description, knowledge,
+				(id, category_id, label, pinyin, en_label, description, knowledge,
 				 play_modes, sort_order, is_enabled, publish_status, createtime)
-			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, false, 0, ${NOW_SQL})`,
+			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, false, 0, ${NOW_SQL})`,
 			[
 				newId,
-				cardKey,
 				source.category_id,
 				`${source.label}（副本）`.slice(0, 50),
 				source.pinyin,
@@ -931,7 +906,7 @@ routes['post:cards_admin_item:duplicate'] = requireAdmin(async ({ body }) => {
 async function read_category_async(categoryId) {
 	const id = sanitize_text(categoryId, 20, '所属分类')
 	if (!id) return null
-	const { rows } = await db.query(`SELECT id, code FROM ${T_CATEGORY} WHERE id = $1`, [id])
+	const { rows } = await db.query(`SELECT id, name FROM ${T_CATEGORY} WHERE id = $1`, [id])
 	return rows?.[0] || null
 }
 
@@ -939,17 +914,6 @@ async function assert_category_exists(categoryId) {
 	const category = await read_category_async(categoryId)
 	if (!category) throw new CardsPayloadError('所属分类不存在')
 	return category
-}
-
-/** 自动生成 card_key 时避免与现有卡片冲突 */
-async function unique_card_key_async(baseKey) {
-	let key = baseKey
-	for (let i = 0; i < 8; i++) {
-		const { rows } = await db.query(`SELECT 1 FROM ${T_ITEM} WHERE card_key = $1 LIMIT 1`, [key])
-		if (!rows?.length) return key
-		key = `${baseKey.slice(0, 55)}_${base.getId().slice(-4)}`
-	}
-	return `${baseKey.slice(0, 52)}_${base.getId().slice(-8)}`
 }
 
 async function insert_assets_async(cardId, assets) {

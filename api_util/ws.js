@@ -19,6 +19,10 @@ const GOEASY_HOST = 'https://rest-hz.goeasy.io/v2/pubsub/publish'
  * @param {object} payload - 消息体对象 (需符合 {app, type, data} 规范)
  */
 export const publish_message_ws = async (channel, payload) => {
+	if (process.env.VITEST && !process.env.TEST_REAL_WS) {
+		return { success: true, mocked: true }
+	}
+
 	try {
 		// Node 环境自带原生 fetch，如需老版本兼容可引入对应 polyfill
 		const globalFetch = typeof fetch !== 'undefined' ? fetch : (await import('node-fetch')).default
