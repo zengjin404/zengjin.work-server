@@ -14,17 +14,17 @@ describe('cards_seed — 初始内容', () => {
 		expect(validate_seed()).toEqual([])
 	})
 
-	it('包含 9 个核心分类与 129 张卡片', () => {
+	it('包含 9 个核心分类与 130 张卡片', () => {
 		expect(SEED_CATEGORY_COUNT).toBe(9)
 		expect(seed_categories).toHaveLength(9)
-		expect(SEED_ITEM_COUNT).toBe(129)
-		expect(seed_items).toHaveLength(129)
+		expect(SEED_ITEM_COUNT).toBe(130)
+		expect(seed_items).toHaveLength(130)
 	})
 
 	it('各分类卡片数量符合设计规范', () => {
 		const expectedCounts = {
 			动物: 15,
-			食物: 23,
+			食物: 24,
 			交通工具: 12,
 			生活用品: 14,
 			大自然: 12,

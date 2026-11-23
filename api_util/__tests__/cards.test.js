@@ -12,8 +12,8 @@
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { generateAccessToken } from '#api_util/jwt.js'
 import { seed_categories } from '#api_util/cards_seed.js'
+import { generateAccessToken } from '#api_util/jwt.js'
 
 const db = (await import('#api_util/db.js')).default
 const mockQuery = vi.fn()
@@ -129,7 +129,7 @@ describe('cards 公开内容接口', () => {
 		const categoryInserts = mockQuery.mock.calls.filter(call => sqlOf(call).includes('INSERT INTO cards_category'))
 		const itemInserts = mockQuery.mock.calls.filter(call => sqlOf(call).includes('INSERT INTO cards_item'))
 		expect(categoryInserts.length).toBe(9)
-		expect(itemInserts.length).toBe(129)
+		expect(itemInserts.length).toBe(130)
 		expect(sqlOf(categoryInserts[0])).toContain('ON CONFLICT DO NOTHING')
 		expect(sqlOf(itemInserts[0])).toContain('ON CONFLICT DO NOTHING')
 		expect(itemInserts[0][1][1]).toBe(seed_categories[0].id)
