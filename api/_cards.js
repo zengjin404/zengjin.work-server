@@ -24,7 +24,7 @@ import db from '#api_util/db.js'
  *   1. 内容读取公开、进度/收藏/对局需要登录；管理接口一律 requireAdmin。
  *   2. 内容版本 (cards_content_version) 是本地缓存是否刷新的唯一依据，
  *      任何管理端写操作都会自增版本。
- *   3. 用户进度以 card_key 为业务主键，SQL 层用 LEAST / GREATEST 做幂等合并，
+ *   3. 用户进度以 card_id 为业务主键，SQL 层用 LEAST / GREATEST 做幂等合并，
  *      重复同步不会把记录改成更晚的首次探索或更早的最近探索。
  *   4. 匿名统计只做按天聚合，不保存 IP、UA、儿童身份信息；IP 仅用于内存限频。
  *   5. 时间列统一使用无时区 TIMESTAMP + 北京时间字面值，与 dphxb / seal / jndv 一致。
@@ -96,7 +96,6 @@ async function ensure_dbInitialized_async() {
 			updatetime     TIMESTAMP
 		);
 	`)
-	await db.query(`DROP INDEX IF EXISTS idx_cards_category_code; ALTER TABLE ${T_CATEGORY} DROP COLUMN IF EXISTS code;`)
 	await db.query(`CREATE INDEX IF NOT EXISTS idx_cards_category_sort ON ${T_CATEGORY} (publish_status, is_enabled, sort_order)`)
 
 	await db.query(`
@@ -116,7 +115,6 @@ async function ensure_dbInitialized_async() {
 			updatetime     TIMESTAMP
 		);
 	`)
-	await db.query(`DROP INDEX IF EXISTS idx_cards_item_key; ALTER TABLE ${T_ITEM} DROP COLUMN IF EXISTS card_key;`)
 	await db.query(`CREATE INDEX IF NOT EXISTS idx_cards_item_category ON ${T_ITEM} (category_id, sort_order)`)
 	await db.query(`CREATE INDEX IF NOT EXISTS idx_cards_item_publish ON ${T_ITEM} (publish_status, is_enabled)`)
 
@@ -162,9 +160,59 @@ async function ensure_dbInitialized_async() {
 			updatetime       TIMESTAMP
 		);
 	`)
-	await db.query(
-		`ALTER TABLE ${T_PROGRESS} ADD COLUMN IF NOT EXISTS card_id VARCHAR(20); DROP INDEX IF EXISTS idx_cards_progress_user_card; CREATE UNIQUE INDEX IF NOT EXISTS idx_cards_progress_user_card ON ${T_PROGRESS} (user_id, card_id); ALTER TABLE ${T_PROGRESS} DROP COLUMN IF EXISTS card_key;`,
-	)
+	// 进度表从 card_key 迁移到 card_id：先加列并回填，确认无未映射行后才删除旧列。
+	// 任何一步无法安全完成时保留 card_key 列，宁可留下可恢复的数据，也不做不可逆删除。
+	await db.query(`ALTER TABLE ${T_PROGRESS} ADD COLUMN IF NOT EXISTS card_id VARCHAR(20)`)
+	await db.query(`
+		DO $$
+		BEGIN
+			IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = '${T_ITEM}' AND column_name = 'card_key')
+			   AND EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = '${T_PROGRESS}' AND column_name = 'card_key') THEN
+				UPDATE ${T_PROGRESS} p
+				SET card_id = i.id
+				FROM ${T_ITEM} i
+				WHERE p.card_id IS NULL AND p.card_key IS NOT NULL AND p.card_key = i.card_key;
+			END IF;
+		END $$;
+	`)
+
+	const unmappedRes = await db.query(`SELECT COUNT(*)::int AS total FROM ${T_PROGRESS} WHERE card_id IS NULL`)
+	const unmappedCount = Number(unmappedRes.rows?.[0]?.total) || 0
+	if (unmappedCount > 0) {
+		console.warn(`[cards] 有 ${unmappedCount} 条旧进度无法回填 card_id，已保留 card_key 列供人工核对`)
+	}
+
+	await db.query(`DROP INDEX IF EXISTS idx_cards_progress_user_card`)
+	await db.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_cards_progress_user_card ON ${T_PROGRESS} (user_id, card_id)`)
+	await db.query(`
+		DO $$
+		BEGIN
+			IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = '${T_PROGRESS}' AND column_name = 'card_key') THEN
+				IF NOT EXISTS (SELECT 1 FROM ${T_PROGRESS} WHERE card_id IS NULL) THEN
+					ALTER TABLE ${T_PROGRESS} DROP COLUMN IF EXISTS card_key;
+				ELSE
+					-- 保留旧列供人工核对时，新进度写入只带 card_id，必须解除旧列的非空约束
+					ALTER TABLE ${T_PROGRESS} ALTER COLUMN card_key DROP NOT NULL;
+				END IF;
+			END IF;
+		END $$;
+	`)
+	await db.query(`
+		DO $$
+		BEGIN
+			IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = '${T_PROGRESS}' AND column_name = 'card_key') THEN
+				DROP INDEX IF EXISTS idx_cards_item_key;
+				ALTER TABLE ${T_ITEM} DROP COLUMN IF EXISTS card_key;
+			ELSIF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = '${T_ITEM}' AND column_name = 'card_key') THEN
+				-- 旧列仍在（进度未全部回填）：允许新卡片不写 card_key，避免阻断新增 / 种子
+				ALTER TABLE ${T_ITEM} ALTER COLUMN card_key DROP NOT NULL;
+			END IF;
+		END $$;
+	`)
+	// 分类 code 不再被进度引用，可直接清退
+	await db.query(`DROP INDEX IF EXISTS idx_cards_category_code`)
+	await db.query(`ALTER TABLE ${T_CATEGORY} DROP COLUMN IF EXISTS code`)
+
 	await db.query(`CREATE INDEX IF NOT EXISTS idx_cards_progress_user_time ON ${T_PROGRESS} (user_id, last_explored_at DESC)`)
 
 	await db.query(`
@@ -288,7 +336,7 @@ async function read_progress_async(userId) {
 	const { rows } = await db.query(
 		`SELECT card_id, explored_at, last_explored_at, favorite_at
 		 FROM ${T_PROGRESS}
-		 WHERE user_id = $1
+		 WHERE user_id = $1 AND card_id IS NOT NULL
 		 ORDER BY last_explored_at DESC NULLS LAST, createtime DESC`,
 		[userId],
 	)
@@ -604,7 +652,7 @@ routes['post:cards_admin_category:insert'] = requireAdmin(async ({ body }) => {
 			],
 		)
 	} catch (error) {
-		if (String(error.message).includes('duplicate key')) return base.respFailure({ msg: '分类编码已存在' })
+		if (String(error.message).includes('duplicate key')) return base.respFailure({ msg: '分类创建失败，请重试' })
 		throw error
 	}
 	await bump_version_async('category')
@@ -634,7 +682,7 @@ routes['post:cards_admin_category:update'] = requireAdmin(async ({ body }) => {
 	try {
 		await db.query(`UPDATE ${T_CATEGORY} SET ${updates.join(', ')} WHERE id = $${binds.length}`, binds)
 	} catch (error) {
-		if (String(error.message).includes('duplicate key')) return base.respFailure({ msg: '分类编码已存在' })
+		if (String(error.message).includes('duplicate key')) return base.respFailure({ msg: '分类创建失败，请重试' })
 		throw error
 	}
 	await bump_version_async('category')
@@ -770,7 +818,7 @@ routes['post:cards_admin_item:insert'] = requireAdmin(async ({ body }) => {
 			],
 		)
 	} catch (error) {
-		if (String(error.message).includes('duplicate key')) return base.respFailure({ msg: '卡片标识已存在，请换一个 card_key' })
+		if (String(error.message).includes('duplicate key')) return base.respFailure({ msg: '卡片创建失败，请重试' })
 		throw error
 	}
 
@@ -806,7 +854,7 @@ routes['post:cards_admin_item:update'] = requireAdmin(async ({ body }) => {
 		try {
 			await db.query(`UPDATE ${T_ITEM} SET ${updates.join(', ')} WHERE id = $${binds.length}`, binds)
 		} catch (error) {
-			if (String(error.message).includes('duplicate key')) return base.respFailure({ msg: '卡片标识已存在，请换一个 card_key' })
+			if (String(error.message).includes('duplicate key')) return base.respFailure({ msg: '卡片创建失败，请重试' })
 			throw error
 		}
 	}
@@ -826,7 +874,7 @@ routes['post:cards_admin_item:update'] = requireAdmin(async ({ body }) => {
 routes['post:cards_admin_item:delete'] = requireAdmin(async ({ body }) => {
 	const id = sanitize_text(body.id, 20, '卡片 id')
 	if (!id) return base.respFailure({ msg: 'id 参数缺失' })
-	// 用户进度按 card_key 保存，卡片删除不会连带删除历史进度
+	// 用户进度按 card_id 保存，卡片删除不会连带删除历史进度
 	const beforeRes = await db.query(`SELECT category_id FROM ${T_ITEM} WHERE id = $1`, [id])
 	const beforeCategoryId = beforeRes.rows?.[0]?.category_id || ''
 	await db.query(`DELETE FROM ${T_ASSET} WHERE card_id = $1`, [id])

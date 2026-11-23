@@ -160,7 +160,7 @@ export async function evaluate_cards_content_gap_async({ categoryId = '', playMo
 
 	const [itemRes, assetRes] = await Promise.all([
 		db.query(
-			`SELECT i.id, i.card_key, i.label, i.play_modes, i.category_id
+			`SELECT i.id, i.label, i.play_modes, i.category_id
 			 FROM cards_item i
 			 JOIN cards_category c ON c.id = i.category_id
 			 WHERE i.publish_status = 1 AND i.is_enabled = true
@@ -270,7 +270,7 @@ export async function report_cards_content_gap_async(req, body = {}) {
 	}
 
 	const payload = sanitize_gap_report_payload(body)
-	const targetCategoryId = payload.categoryId || payload.categoryCode || ''
+	const targetCategoryId = payload.categoryId || ''
 	const category = await read_public_category_async(targetCategoryId)
 	if (targetCategoryId && !category) throw new NotificationPayloadError('分类不存在或未发布')
 

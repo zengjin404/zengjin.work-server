@@ -10,6 +10,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { generateAccessToken } from '#api_util/jwt.js'
+import { NotificationPayloadError, sanitize_gap_report_payload } from '#api_util/notification_schema.js'
 
 const db = (await import('#api_util/db.js')).default
 const mockQuery = vi.fn()
@@ -56,6 +57,31 @@ async function call_api(handler, url, method = 'GET', { headers = {}, body = {},
 	await handler(req, resp)
 	return out
 }
+
+describe('内容缺口上报载荷 — 纯 ID 契约', () => {
+	it('接受数字开头的主键 ID', () => {
+		const payload = sanitize_gap_report_payload({
+			appCode: 'cards',
+			category: 'missing_resource',
+			categoryId: '6d3cat000001',
+			playMode: 'connect',
+			imageMode: 'fixed_image',
+		})
+		expect(payload.categoryId).toBe('6d3cat000001')
+	})
+
+	it('旧客户端的 categoryCode 不会被静默当成主键 ID', () => {
+		expect(() =>
+			sanitize_gap_report_payload({
+				appCode: 'cards',
+				category: 'missing_resource',
+				categoryCode: 'animal',
+				playMode: 'connect',
+				imageMode: 'fixed_image',
+			}),
+		).toThrow(NotificationPayloadError)
+	})
+})
 
 describe('Admin 通知管理接口', () => {
 	it('普通用户查询通知被拒绝', async () => {

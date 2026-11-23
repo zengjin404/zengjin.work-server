@@ -25,7 +25,7 @@ export const CARDS_IMAGE_MODES = ['fixed_image', 'random_image', 'image_text']
 
 export const NOTIFICATION_SETTING_KEYS = ['content_gap_alert_enabled']
 
-const CATEGORY_CODE_RE = /^[a-z][a-z0-9_]{1,29}$/
+const CATEGORY_ID_RE = /^[a-zA-Z0-9_-]{1,30}$/
 
 /** 文本清洗：去控制字符、trim、限制长度 */
 export function sanitize_notification_text(value, max = 255, field = '文本') {
@@ -84,13 +84,17 @@ export function sanitize_gap_report_payload(body = {}) {
 	const imageMode = sanitize_enum(body.imageMode ?? body.image_mode, CARDS_IMAGE_MODES, '认知模式')
 	if (!imageMode) throw new NotificationPayloadError('缺少认知模式')
 
-	const categoryId = sanitize_notification_text(
-		body.categoryId ?? body.category_id ?? body.categoryCode ?? body.category_code,
-		30,
-		'分类标识',
-	)
+	// 方案二后分类只有主键 id；旧客户端的 categoryCode 是 code，不能静默当成 id 处理
+	const legacyCode = body.categoryCode ?? body.category_code
+	const rawCategoryId = body.categoryId ?? body.category_id
+	if ((rawCategoryId == null || rawCategoryId === '') && legacyCode != null && legacyCode !== '') {
+		throw new NotificationPayloadError('分类参数已升级，请刷新页面后重试')
+	}
 
-	return { appCode, category, playMode, imageMode, categoryId, categoryCode: categoryId }
+	const categoryId = sanitize_notification_text(rawCategoryId, 30, '分类标识')
+	if (categoryId && !CATEGORY_ID_RE.test(categoryId)) throw new NotificationPayloadError('分类标识不合法')
+
+	return { appCode, category, playMode, imageMode, categoryId }
 }
 
 /** 管理端列表筛选参数 */

@@ -21,8 +21,6 @@ export class CardsPayloadError extends Error {
 
 export const CARD_ID_RE = /^[a-zA-Z0-9_-]{1,40}$/
 export const CATEGORY_ID_RE = /^[a-zA-Z0-9_-]{1,30}$/
-export const CARD_KEY_RE = CARD_ID_RE
-export const CATEGORY_CODE_RE = CATEGORY_ID_RE
 export const OBJECT_ID_RE = /^[a-z0-9_-]{0,60}$/
 export const PLAY_MODES = ['recognize', 'connect', 'memory']
 export const ASSET_TYPES = ['image', 'thumbnail', 'narration', 'sound', 'emoji']
@@ -215,26 +213,6 @@ export function sanitize_assets(value) {
 	}
 
 	return sanitized
-}
-
-/**
- * 根据分类与卡片文字生成稳定的 card_key 建议值
- * 只作为创建时的默认值；显式传入的 card_key 仍优先，并保持创建后不可修改。
- */
-export function suggest_card_key(categoryCode = '', payload = {}) {
-	const slug = value =>
-		String(value ?? '')
-			.normalize('NFD')
-			.replace(/\p{M}/gu, '')
-			.toLowerCase()
-			.replace(/[^a-z0-9]+/g, '_')
-			.replace(/^_+|_+$/g, '')
-
-	const category = slug(categoryCode) || 'card'
-	const tail = [payload.en_label, payload.label, payload.pinyin].map(slug).find(Boolean) || 'card'
-	let key = `${category}_${tail}`.replace(/_+/g, '_').replace(/^_+|_+$/g, '')
-	if (!/^[a-z]/.test(key)) key = `card_${key}`
-	return key.slice(0, 50) || 'card'
 }
 
 /** 分类写入载荷 */
