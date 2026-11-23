@@ -257,17 +257,18 @@ function hash_req_ip(req) {
 /**
  * 公开缺口上报
  *
- * 顺序：开关 → 限频 → 字段校验 → 读取真实内容 → 独立验证资格 → 原子聚合。
+ * 顺序：限频 → 开关 → 字段校验 → 读取真实内容 → 独立验证资格 → 原子聚合。
+ * 开关关闭时也先走限频，避免匿名请求无成本地反复触发数据库查询。
  * 前端报告的缺口不成立时直接结束，不创建通知。
  */
 export async function report_cards_content_gap_async(req, body = {}) {
-	const enabled = await get_notification_setting_async('content_gap_alert_enabled', false)
-	if (!enabled) return { accepted: false, reason: 'disabled' }
-
 	const ipHash = hash_req_ip(req)
 	if (!(await hit_rate_limit_async('cards-gap', ipHash, GAP_REPORT_MAX_PER_MINUTE, 60000))) {
 		throw new NotificationPayloadError('上报过于频繁，请稍后再试')
 	}
+
+	const enabled = await get_notification_setting_async('content_gap_alert_enabled', false)
+	if (!enabled) return { accepted: false, reason: 'disabled' }
 
 	const payload = sanitize_gap_report_payload(body)
 	const targetCategoryId = payload.categoryId || ''
@@ -329,13 +330,17 @@ export async function report_cards_content_gap_async(req, body = {}) {
  * @param {Object} params
  * @param {string[]} params.categoryIds 受影响的分类 id；为空时不做任何检查
  * @param {string} [params.reason] 变更来源，仅用于日志诊断
+ * @param {boolean} [params.all] 忽略分类过滤，检查全部未解决缺口（仅用于开关重新开启时的一次性对账）
  */
-export async function resolve_cards_content_gaps_async({ categoryIds = [], reason = 'content_changed' } = {}) {
+export async function resolve_cards_content_gaps_async({ categoryIds = [], reason = 'content_changed', all = false } = {}) {
 	const ids = [...new Set((categoryIds || []).map(id => String(id || '').trim()).filter(Boolean))]
-	if (!ids.length) return { checked: 0, resolved: 0 }
+	if (!ids.length && !all) return { checked: 0, resolved: 0 }
 
 	// 内容写操作可能先于通知模块首次请求发生，这里保证通知表可用
 	await ensure_notification_db_async()
+	// 开关关闭时只停止接收新上报，也不允许自动消警历史通知
+	const enabled = await get_notification_setting_async('content_gap_alert_enabled', false)
+	if (!enabled) return { checked: 0, resolved: 0, disabled: true }
 	const rows = await select_open_notifications_async({ appCode: GAP_APP_CODE, category: GAP_CATEGORY })
 	const cache = new Map()
 	let checked = 0
@@ -345,7 +350,7 @@ export async function resolve_cards_content_gaps_async({ categoryIds = [], reaso
 		const metadata = typeof row.metadata === 'string' ? safe_parse(row.metadata) : row.metadata || {}
 		const categoryId = String(metadata.categoryId || '')
 		// 混搭（全部分类）缺口可能被任意分类的内容变化影响，需要一起检查
-		if (categoryId && categoryId !== 'all' && !ids.includes(categoryId)) continue
+		if (!all && categoryId && categoryId !== 'all' && !ids.includes(categoryId)) continue
 
 		const playMode = String(metadata.playMode || '')
 		const imageMode = String(metadata.imageMode || '')

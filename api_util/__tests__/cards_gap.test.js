@@ -166,6 +166,7 @@ describe('cards_gap — 分类资格与自动消警', () => {
 			const text = String(sql)
 			if (text.startsWith('CREATE TABLE') || text.startsWith('CREATE INDEX')) return EMPTY
 			if (text.includes('INSERT INTO admin_notification_setting')) return EMPTY
+			if (text.includes('SELECT value FROM admin_notification_setting')) return { rows: [{ value: true }] }
 			if (text.includes('SELECT id, dedupe_key, metadata')) {
 				return {
 					rows: [
@@ -201,6 +202,7 @@ describe('cards_gap — 分类资格与自动消警', () => {
 			const text = String(sql)
 			if (text.startsWith('CREATE TABLE') || text.startsWith('CREATE INDEX')) return EMPTY
 			if (text.includes('INSERT INTO admin_notification_setting')) return EMPTY
+			if (text.includes('SELECT value FROM admin_notification_setting')) return { rows: [{ value: true }] }
 			if (text.includes('SELECT id, dedupe_key, metadata')) {
 				return {
 					rows: [
@@ -224,6 +226,28 @@ describe('cards_gap — 分类资格与自动消警', () => {
 		})
 
 		const result = await resolve_cards_content_gaps_async({ categoryIds: ['cc_animal'], reason: 'test' })
+		expect(result.resolved).toBe(0)
+		expect(resolved).toBe(false)
+	})
+
+	it('开关关闭时只停止新上报，不自动解决历史通知', async () => {
+		const { resolve_cards_content_gaps_async } = await load_gap()
+		let resolved = false
+
+		mockQuery.mockImplementation(async sql => {
+			const text = String(sql)
+			if (text.startsWith('CREATE TABLE') || text.startsWith('CREATE INDEX')) return EMPTY
+			if (text.includes('INSERT INTO admin_notification_setting')) return EMPTY
+			if (text.includes('SELECT value FROM admin_notification_setting')) return { rows: [{ value: false }] }
+			if (text.includes(`SET status = 'resolved'`)) {
+				resolved = true
+				return EMPTY
+			}
+			return EMPTY
+		})
+
+		const result = await resolve_cards_content_gaps_async({ categoryIds: ['cc_animal'], reason: 'test' })
+		expect(result.disabled).toBe(true)
 		expect(result.resolved).toBe(0)
 		expect(resolved).toBe(false)
 	})

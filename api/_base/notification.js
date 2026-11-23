@@ -1,6 +1,6 @@
 import { requireAdmin } from '#api_util/auth_middleware.js'
 import base from '#api_util/base.js'
-import { evaluate_cards_content_gap_async, report_cards_content_gap_async } from '#api_util/cards_gap.js'
+import { evaluate_cards_content_gap_async, report_cards_content_gap_async, resolve_cards_content_gaps_async } from '#api_util/cards_gap.js'
 import {
 	CARDS_IMAGE_MODES,
 	CARDS_PLAY_MODES,
@@ -129,6 +129,17 @@ routes['get:admin_notification:setting'] = requireAdmin(async () => {
 routes['post:admin_notification:setting'] = requireAdmin(async ({ body }) => {
 	const { key, value } = sanitize_setting_payload(body)
 	await set_notification_setting_async(key, value)
+
+	// 开关关闭期间内容可能已被修复，重新开启时做一次全量对账，避免遗留失效的待处理通知
+	if (key === 'content_gap_alert_enabled' && value) {
+		try {
+			await resolve_cards_content_gaps_async({ categoryIds: [], all: true, reason: 'switch_enabled' })
+		} catch (error) {
+			// 对账失败不影响开关本身保存
+			console.error('开启缺口提醒后的自动对账失败:', error.message)
+		}
+	}
+
 	return base.respSuccess({ msg: value ? '已开启' : '已关闭', data: { [key]: value } })
 })
 
