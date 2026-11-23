@@ -41,9 +41,26 @@ const crud = {
 	post: {},
 }
 
+/**
+ * 组装 ORDER BY 子句
+ *
+ * 默认按主键倒序（入库倒序）。调用方可用 order 覆盖：
+ *   order: [{ field: 'sort', dir: 'asc' }, { field: 'name', dir: 'asc' }]
+ * 为防注入，字段必须出现在该模块的 fields 白名单中，方向只接受 asc / desc，其余项静默忽略。
+ */
+function build_order(table, fields, order) {
+	const parts = []
+	for (const item of Array.isArray(order) ? order : []) {
+		if (!item || !fields.includes(item.field)) continue
+		const dir = String(item.dir || 'asc').toLowerCase() === 'desc' ? 'desc' : 'asc'
+		parts.push(`${table}.${quoteCol(item.field)} ${dir}`)
+	}
+	return parts.length ? parts.join(', ') : `${table}.id desc`
+}
+
 // 查询
 crud.get.select = async options => {
-	const { table, fields, valids, joins, query, body } = options
+	const { table, fields, valids, joins, query, body, order } = options
 
 	const page = Number(query.page || query.current) || 0
 	const size = Math.min(Number(query.size || query.pageSize) || 0, 100000)
@@ -80,8 +97,9 @@ crud.get.select = async options => {
 	try {
 		const offset = (page - 1) * size
 
+		const orderStr = build_order(table, fields, order)
 		const [res, res2] = await Promise.all([
-			db.query(`select ${fieldStr} from ${table} ${joinStr} ${whereStr} order by ${table}.id desc limit ${size} offset ${offset}`, binds),
+			db.query(`select ${fieldStr} from ${table} ${joinStr} ${whereStr} order by ${orderStr} limit ${size} offset ${offset}`, binds),
 			db.query(`select count(*) as total from ${table} ${whereStr}`, binds),
 		])
 
@@ -149,7 +167,7 @@ crud.get.detail = async options => {
 
 // 新增
 crud.post.insert = async options => {
-	const { table, fields, valids, joins, query, body } = options
+	const { table, fields, valids, joins, query, body, extraMsg = '' } = options
 
 	body.id = base.getId()
 	body.createtime = base.getTime()
@@ -176,7 +194,7 @@ crud.post.insert = async options => {
 		const res = await db.query(`insert into ${table} (${cols.join(',')}) values (${cols.map((_, i) => `$${i + 1}`).join(',')}) returning id`, binds)
 		if (res?.rowCount) {
 			return base.respSuccess({
-				msg: '新增成功',
+				msg: extraMsg ? `新增成功（${extraMsg}）` : '新增成功',
 				data: body.id,
 			})
 		}
@@ -190,7 +208,7 @@ crud.post.insert = async options => {
 
 // 修改
 crud.post.update = async options => {
-	const { table, fields, valids, joins, query, body } = options
+	const { table, fields, valids, joins, query, body, extraMsg = '' } = options
 
 	if (!body.id) {
 		return base.respFailure({
@@ -228,15 +246,16 @@ crud.post.update = async options => {
 				successIds.push(id)
 			}
 		}
+		const suffix = extraMsg ? `（${extraMsg}）` : ''
 		if (successIds.length == ids.length) {
 			return base.respSuccess({
-				msg: `编辑成功`,
+				msg: `编辑成功${suffix}`,
 				data: successIds.join(','),
 			})
 		}
 		if (successIds.length) {
 			return base.respSuccess({
-				msg: `编辑成功 ${successIds.length} 条，失败 ${ids.length - successIds.length} 条`,
+				msg: `编辑成功 ${successIds.length} 条，失败 ${ids.length - successIds.length} 条${suffix}`,
 				data: successIds.join(','),
 			})
 		}

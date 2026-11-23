@@ -125,6 +125,41 @@ describe('crud.get.select', () => {
 		expect(dataSql).toContain('base_app."desc" ilike $1')
 	})
 
+	it('order 选项应按 fields 白名单生成多字段排序', async () => {
+		mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 }).mockResolvedValueOnce({ rows: [{ total: '0' }] })
+
+		await crud.get.select({
+			...options,
+			fields: ['name', 'maker', 'sort'],
+			order: [
+				{ field: 'sort', dir: 'asc' },
+				{ field: 'name', dir: 'desc' },
+			],
+			query: { page: 1, size: 10 },
+		})
+
+		expect(mockQuery.mock.calls[0][0]).toContain('order by fc.sort asc, fc.name desc')
+	})
+
+	it('order 中不在白名单的字段与非法方向应被忽略', async () => {
+		mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 }).mockResolvedValueOnce({ rows: [{ total: '0' }] })
+
+		await crud.get.select({
+			...options,
+			order: [
+				{ field: 'id; drop table fc', dir: 'asc' },
+				{ field: 'name', dir: 'sideways; --' },
+			],
+			query: { page: 1, size: 10 },
+		})
+
+		const dataSql = mockQuery.mock.calls[0][0]
+		expect(dataSql).not.toContain('drop table')
+		// 非法方向回退 asc，SQL 中不出现原样拼接的方向词
+		expect(dataSql).toContain('order by fc.name asc')
+		expect(dataSql).not.toContain('sideways')
+	})
+
 	it('db.query 异常时应返回失败而非抛出', async () => {
 		mockQuery.mockRejectedValueOnce(new Error('connection refused'))
 

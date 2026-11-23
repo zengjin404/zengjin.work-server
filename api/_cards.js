@@ -589,7 +589,7 @@ routes['get:cards_admin_category:select'] = requireAdmin(async ({ query }) => {
 	const binds = []
 	if (keyword) {
 		binds.push(`%${keyword}%`)
-		wheres.push(`c.name ILIKE ${binds.length}`)
+		wheres.push(`c.name ILIKE $${binds.length}`)
 	}
 	const whereStr = wheres.length ? `WHERE ${wheres.join(' AND ')}` : ''
 

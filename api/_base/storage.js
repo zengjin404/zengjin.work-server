@@ -1,5 +1,10 @@
 import provider from '#api_util/_storage_provider.js'
+import { checkAuth } from '#api_util/auth_middleware.js'
 import base from '#api_util/base.js'
+
+// 存储管理台属于管理员 / 运维工具：列表与写操作必须管理员鉴权。
+// token 仍保持原状，供已登录用户头像等上传场景复用。
+const MANAGEMENT_ACTIONS = new Set(['list', 'delete', 'move', 'copy', 'chtype', 'mkdir'])
 
 /**
  * 通用存储适配器 (Provider)
@@ -9,6 +14,15 @@ export default async (req, resp) => {
 	base.req = req
 	base.resp = resp
 	const { action, query, body } = base.getReqInfo()
+
+	// 列表 / 删除 / 移动 / 复制 / 改存储类型 / 建目录：仅管理员
+	if (MANAGEMENT_ACTIONS.has(action)) {
+		const authed = await checkAuth(req, resp)
+		if (!authed) return
+		if (req.user?.username !== 'admin') {
+			return resp.status(403).json({ code: -1, msg: '无操作权限: 仅系统管理员可执行' })
+		}
+	}
 
 	// 获取目标桶 (兼容嵌套参数格式)
 	const bucket = query.bucket || query['params[bucket]'] || body.bucket || 'file'

@@ -10,11 +10,12 @@ CREATE TABLE IF NOT EXISTS base_app (
     desc       VARCHAR(255) DEFAULT '',
     icon       VARCHAR(100) DEFAULT '',
     icon_color VARCHAR(20)  DEFAULT '',
-    category   VARCHAR(20)  DEFAULT 'tool',
+    category   VARCHAR(100) DEFAULT 'efficiency', -- 多分类逗号分隔，只允许六大正式分类
     url        VARCHAR(150) DEFAULT '',
+    image      VARCHAR(500) DEFAULT '',
     featured   SMALLINT     DEFAULT 0,
     tag        VARCHAR(20)  DEFAULT '',
-    visibility VARCHAR(20)  DEFAULT 'public',
+    visibility VARCHAR(20)  DEFAULT 'public',     -- public / private / admin
     status     INT          DEFAULT 1,
     show       BOOLEAN      DEFAULT true,
     sort       INT          DEFAULT 0,
@@ -23,3 +24,10 @@ CREATE TABLE IF NOT EXISTS base_app (
 );
 
 CREATE INDEX IF NOT EXISTS idx_base_app_show_status_sort ON base_app (show, status, sort);
+CREATE INDEX IF NOT EXISTS idx_base_app_visibility ON base_app (visibility, show, status);
+
+-- 一次性迁移标记：存在 key 后不再覆盖管理员手动调整的分类
+CREATE TABLE IF NOT EXISTS base_app_migration (
+    key         VARCHAR(64) PRIMARY KEY,
+    createtime  TIMESTAMPTZ DEFAULT NOW()
+);

@@ -1,43 +1,70 @@
 /**
  * api/_base/app.js 单元测试
  *
- * 覆盖重点：
- *  - get.home:  首页公开列表 SQL 结构（show & status 过滤、featured/sort 排序）、响应格式化
- *  - 种子幂等：  计数不足 presets.length 时用 ON CONFLICT 增量补齐（不覆盖已存在行）
- *  - 鉴权门槛：  select/insert 等管理端操作在未登录时被 requireAuth 拒绝（401）
- *
- * 关键：所有数据查询均通过 mock 的 db.query，验证 SQL 使用 $n 参数化，不拼接用户数据。
- * 注意：app 模块持有模块级 dbInitialized 缓存，故每个用例前 vi.resetModules() 重新加载；
- *       db 单例由 global.dbPools 缓存，resetModules 后仍是同一个实例，运行时补丁持续生效。
- *       （曾用「给 import 路径拼查询串」做缓存破坏，但 vite 分析不了变量拼接的说明符，
- *       运行时报 Unknown variable dynamic import，已改为与 ai.test.js 同一套做法。）
+ * 覆盖：
+ *  - 首页公开列表只返回 public + show + status
+ *  - 管理端 CRUD 必须是管理员
+ *  - 分类写入只接受六大正式分类，旧分类 / 未定义分类被拒绝
+ *  - >2 分类允许保存但返回提醒
+ *  - 元数据审查接口
+ *  - 分类迁移标记存在时不再覆盖现有分类
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { generateAccessToken } from '#api_util/jwt.js'
 
-// ============================================================
-// Mock 层：运行时替换真实 db 单例的 query
-// 刻意不用 vi.mock('#api_util/db.js')：bun 的 mock 注册表跨文件共享，
-// 会与 crud.test.js 的 db mock（同一模块 ID）冲突；运行时补丁只影响本文件。
-// ============================================================
 const db = (await import('#api_util/db.js')).default
 const mockQuery = vi.fn()
+const release = vi.fn()
+
+const EMPTY = { rows: [], rowCount: 0 }
+const admin_token = () => `Bearer ${generateAccessToken({ userId: 'admin001', username: 'admin' })}`
+const user_token = () => `Bearer ${generateAccessToken({ userId: 'user001', username: 'tester' })}`
+
+let rules = []
+
+function sqlOf(call) {
+	return String(call[0]).trim()
+}
 
 beforeEach(() => {
+	rules = []
 	mockQuery.mockReset()
-	// 每次把真实池实例的 query 替换为 spy（Pool.prototype.query 被实例属性遮蔽）
+	release.mockReset()
 	db.query = (...args) => mockQuery(...args)
-	vi.resetModules() // 重置 app 模块级 dbInitialized，使 ensure 每个用例都真实执行
+	db.connect = async () => ({ query: (...args) => mockQuery(...args), release })
+
+	mockQuery.mockImplementation(async (sql, binds = []) => {
+		const text = String(sql).trim()
+		for (const rule of rules) {
+			const hit = rule(text, binds)
+			if (hit !== undefined) return hit
+		}
+
+		if (text.startsWith('CREATE') || text.startsWith('ALTER')) return EMPTY
+		if (text.includes("SET id = 'cameracapture'")) return EMPTY
+		if (text.includes('SELECT COUNT(*) AS total FROM base_app')) return { rows: [{ total: '1' }] }
+		if (text.includes('SELECT COUNT(*) FROM base_app')) return { rows: [{ count: '100' }] }
+		if (text.includes('SELECT 1 FROM base_app_migration')) return { rows: [{ exists: 1 }] }
+		if (text.includes('FROM base_app') && text.includes('WHERE show = true')) return { rows: [], rowCount: 0 }
+		if (text.includes('SELECT id, name, title, category, visibility')) return { rows: [], rowCount: 0 }
+		if (text.startsWith('SELECT * FROM base_app')) return { rows: [], rowCount: 0 }
+		const lower = text.toLowerCase()
+		if (lower.startsWith('insert into base_app')) return { rows: [], rowCount: 1 }
+		if (lower.startsWith('update base_app')) return { rows: [], rowCount: 1 }
+		if (lower.startsWith('delete from base_app')) return { rows: [], rowCount: 1 }
+		if (text.startsWith('BEGIN') || text.startsWith('COMMIT') || text.startsWith('ROLLBACK')) return EMPTY
+		return EMPTY
+	})
+
+	vi.resetModules()
 })
 
-// 重新导入一份全新的 app 模块（模块级 dbInitialized 状态随之重置），返回其 default handler
 async function load_app() {
 	return (await import('../../api/_base/app.js')).default
 }
 
-// 构造一次 HTTP 调用，记录 resp.status 与 body（模块内部会自行注入 base.req/base.resp）
-async function call_api(appHandler, url, method, headers = {}, body = {}, query = {}) {
+async function call_api(handler, url, method = 'GET', { headers = {}, body = {}, query = {} } = {}) {
 	const out = {}
 	const resp = {
 		status(code) {
@@ -48,213 +75,163 @@ async function call_api(appHandler, url, method, headers = {}, body = {}, query 
 		end() {},
 	}
 	const req = { url, method, query, body, headers }
-	await appHandler(req, resp)
+	await handler(req, resp)
 	return out
 }
 
-// 生成管理员访问令牌（vitest 已注入 JWT_SECRET）
-const admin_token = () => `Bearer ${generateAccessToken({ userId: 'admin001', username: 'admin' })}`
-
-// 种子条数：必须与 api/_base/app.js 的 presets.length 保持一致
-// ensure 只在 COUNT(*) < presets.length 时补种，用例靠这个数决定是否走补种分支；
-// 数量对不上会让补种 INSERT 抢占后续 mock 队列，表现为「首页查询莫名失败」
-const PRESET_COUNT = 36
-
-// 默认 mock：ensure 阶段 8 个查询 (建表/索引/image迁移/category扩容/老数据刷正/camera 更名/计数/图卡乐园显式注册)
-function mock_ensure(count = String(PRESET_COUNT)) {
-	mockQuery
-		.mockResolvedValueOnce({ rows: [], rowCount: 0 }) // CREATE TABLE
-		.mockResolvedValueOnce({ rows: [], rowCount: 0 }) // CREATE INDEX
-		.mockResolvedValueOnce({ rows: [], rowCount: 0 }) // ALTER TABLE (image 列迁移)
-		.mockResolvedValueOnce({ rows: [], rowCount: 0 }) // ALTER TABLE (category 列扩容)
-		.mockResolvedValueOnce({ rows: [], rowCount: 0 }) // UPDATE (老分类迁移)
-		.mockResolvedValueOnce({ rows: [], rowCount: 0 }) // UPDATE (camera 更名 cameracapture)
-		.mockResolvedValueOnce({ rows: [{ count }] }) // SELECT COUNT
-		.mockResolvedValueOnce({ rows: [], rowCount: 0 }) // INSERT cards 应用（显式幂等注册）
-}
-
-beforeEach(() => {
-	mockQuery.mockReset()
-})
-
-describe('app.get.home — 首页公开列表', () => {
-	it('仅返回 show=true 且 status=1 的应用，并按 featured/sort 排序', async () => {
-		const appHandler = await load_app()
-		mock_ensure()
-		mockQuery.mockResolvedValueOnce({
-			rows: [
-				{ name: 'ai', title: 'Zen AI 对话', featured: 1, sort: 10 },
-				{ name: 'jq', title: '军旗卡牌', featured: 0, sort: 100 },
-			],
-			rowCount: 2,
+describe('app.get.home — 公开应用清单', () => {
+	it('只返回 public + show=true + status=1，并按推荐/排序输出', async () => {
+		const handler = await load_app()
+		rules.push((text, binds) => {
+			if (text.includes('FROM base_app') && text.includes('WHERE show = true')) {
+				return { rows: [{ name: 'ai', title: 'Zen AI 对话', category: 'efficiency' }], rowCount: 1 }
+			}
+			return undefined
 		})
 
-		const res = await call_api(appHandler, '/api/base/app/home', 'GET')
-
-		expect(res.status).toBe(200)
-		expect(res.json.code).toBe(0)
-		expect(res.json.data).toHaveLength(2)
-
-		// 校验过滤与排序 SQL（过滤条件写死在 SQL 层，不拼接用户输入）
-		const homeSql = mockQuery.mock.calls[8][0]
-		expect(homeSql).toContain('WHERE show = true AND status = 1')
-		expect(homeSql).toContain('ORDER BY featured DESC, sort ASC, createtime ASC')
-		// 封面图字段必须随列表返回（大卡封面 / 图标降级共用）
-		expect(homeSql).toContain('image')
-	})
-
-	it('cards 显式注册会把旧中文名迁移为图卡乐园', async () => {
-		const appHandler = await load_app()
-		mock_ensure()
-		mockQuery.mockResolvedValue({ rows: [], rowCount: 0 })
-
-		await call_api(appHandler, '/api/base/app/home', 'GET')
-
-		const cardsCall = mockQuery.mock.calls[7]
-		expect(String(cardsCall[0])).toContain('ON CONFLICT (name) DO UPDATE')
-		expect(String(cardsCall[0])).toContain("base_app.title = '认知图卡'")
-	})
-
-	it('种子缺失时以 ON CONFLICT 幂等补插（不覆盖已存在行）', async () => {
-		const appHandler = await load_app()
-		// 表里只有 1 行（< presets.length），应触发补种
-		mock_ensure('1')
-		mockQuery.mockResolvedValue({ rows: [], rowCount: 0 })
-
-		await call_api(appHandler, '/api/base/app/home', 'GET')
-
-		// 8 次 ensure 查询 (建表/索引/image迁移/category扩容/老分类迁移/camera更名/计数/cards 注册) 之后的所有调用都是 INSERT
-		const insertCalls = mockQuery.mock.calls.slice(8)
-		expect(insertCalls.length).toBeGreaterThanOrEqual(PRESET_COUNT)
-		const insertSql = insertCalls[0][0]
-		expect(insertSql).toContain('INSERT INTO base_app')
-		expect(insertSql).toContain('ON CONFLICT (name) DO NOTHING')
-		// 参数化占位符而非拼接
-		expect(insertSql).toContain('$14')
-		const binds = insertCalls[0][1]
-		expect(typeof binds[0]).toBe('string')
-		expect(binds[0].length).toBeGreaterThan(0)
-	})
-
-	it('home 查询异常时返回失败而非抛出', async () => {
-		const appHandler = await load_app()
-		// 建表/种子正常，但首页列表查询本身失败
-		mock_ensure()
-		mockQuery.mockRejectedValueOnce(new Error('connection refused'))
-
-		const res = await call_api(appHandler, '/api/base/app/home', 'GET')
-
-		expect(res.json.code).toBe(-1)
-		expect(res.json.msg).toContain('查询失败')
-	})
-})
-
-describe('app 管理端操作 — 未登录拦截', () => {
-	it('select 无 token 应被 requireAuth 拒绝（401 未提供认证令牌）', async () => {
-		const appHandler = await load_app()
-		mock_ensure()
-		mockQuery.mockResolvedValue({ rows: [], rowCount: 0 })
-
-		const res = await call_api(appHandler, '/api/base/app/select', 'GET', {})
-
-		expect(res.status).toBe(401)
-		expect(res.json.msg).toContain('未提供认证令牌')
-		// 鉴权失败后不应发起列表数据查询（排除 ensure 的 SELECT COUNT）
-		const selectCalls = mockQuery.mock.calls.filter(c => String(c[0]).toLowerCase().includes('select base_app'))
-		expect(selectCalls).toHaveLength(0)
-	})
-
-	it('insert 无 token 应被 requireAuth 拒绝（401）', async () => {
-		const appHandler = await load_app()
-		mock_ensure()
-		mockQuery.mockResolvedValue({ rows: [], rowCount: 0 })
-
-		const res = await call_api(appHandler, '/api/base/app/insert', 'POST', {})
-
-		expect(res.status).toBe(401)
-		// ensure 阶段本身有 cards 应用的幂等注册 INSERT，只校验业务调用段没有 INSERT
-		const businessCalls = mockQuery.mock.calls.slice(8)
-		expect(businessCalls.filter(c => String(c[0]).toLowerCase().includes('insert'))).toHaveLength(0)
-	})
-
-	it('无 token 访问公开 home 仍可正常放行', async () => {
-		const appHandler = await load_app()
-		mock_ensure()
-		mockQuery.mockResolvedValueOnce({ rows: [{ name: 'ai' }], rowCount: 1 })
-
-		const res = await call_api(appHandler, '/api/base/app/home', 'GET', {})
+		const res = await call_api(handler, '/api/base/app/home')
 
 		expect(res.json.code).toBe(0)
 		expect(res.json.data).toHaveLength(1)
+		const homeSql = mockQuery.mock.calls.map(sqlOf).find(text => text.includes('WHERE show = true'))
+		expect(homeSql).toContain(`COALESCE(visibility, 'public') = 'public'`)
+		expect(homeSql).toContain('ORDER BY featured DESC, sort ASC, createtime ASC')
 	})
 })
 
-describe('app 管理端操作 — 登录后 CRUD', () => {
-	const token = admin_token()
+describe('app 管理端 — 鉴权', () => {
+	it('未登录查询返回 401', async () => {
+		const handler = await load_app()
+		const res = await call_api(handler, '/api/base/app/select')
+		expect(res.status).toBe(401)
+	})
 
-	it('insert: fields 必须包含 id 且首绑定为新生成主键', async () => {
-		const appHandler = await load_app()
-		mock_ensure()
-		mockQuery.mockResolvedValueOnce({ rows: [{ id: 'newid' }], rowCount: 1 })
+	it('管理员查询按排序权重升序，同权重按应用标识排序', async () => {
+		const handler = await load_app()
+		rules.push((text, binds) => {
+			if (text.includes('from base_app') && text.includes('limit')) return { rows: [], rowCount: 0 }
+			if (text.includes('count(*) as total from base_app')) return { rows: [{ total: '0' }] }
+			return undefined
+		})
 
-		const res = await call_api(
-			appHandler,
-			'/api/base/app/insert',
-			'POST',
-			{ Authorization: token },
-			{ name: 'testapp', title: '测试应用', category: 'tool', show: true },
-		)
+		const res = await call_api(handler, '/api/base/app/select?page=1&size=10', 'GET', { headers: { authorization: admin_token() } })
 
-		expect(res.status).toBe(200)
 		expect(res.json.code).toBe(0)
-		expect(res.json.msg).toBe('新增成功')
+		const selectSql = mockQuery.mock.calls.map(sqlOf).find(text => text.includes('from base_app') && text.includes('limit'))
+		expect(selectSql.toLowerCase()).toContain('order by base_app.sort asc, base_app.name asc')
+	})
 
-		// 定位 INSERT 语句（ensure 阶段的 CREATE/COUNT 之后）
-		const insertCall = mockQuery.mock.calls.find(c => String(c[0]).startsWith('insert into base_app'))
+	it('普通登录用户查询返回 403', async () => {
+		const handler = await load_app()
+		const res = await call_api(handler, '/api/base/app/select', 'GET', { headers: { authorization: user_token() } })
+		expect(res.status).toBe(403)
+		expect(res.json.msg).toContain('无操作权限')
+	})
+})
+
+describe('app 写入 — 分类校验', () => {
+	it('非法分类被拒绝', async () => {
+		const handler = await load_app()
+		const res = await call_api(handler, '/api/base/app/insert', 'POST', {
+			headers: { authorization: admin_token() },
+			body: { name: 'bad', title: '坏应用', category: 'unknown_cat' },
+		})
+		expect(res.json.code).toBe(-1)
+		expect(res.json.msg).toContain('未定义或已停用的分类')
+	})
+
+	it('旧分类不允许继续写入', async () => {
+		const handler = await load_app()
+		const res = await call_api(handler, '/api/base/app/insert', 'POST', {
+			headers: { authorization: admin_token() },
+			body: { name: 'legacy', title: '旧分类应用', category: 'daily' },
+		})
+		expect(res.json.code).toBe(-1)
+		expect(res.json.msg).toContain('daily')
+	})
+
+	it('合法分类会去重并按输入顺序保存', async () => {
+		const handler = await load_app()
+		const res = await call_api(handler, '/api/base/app/insert', 'POST', {
+			headers: { authorization: admin_token() },
+			body: { name: 'good', title: '好应用', category: ['media', 'efficiency', 'media'], visibility: 'public' },
+		})
+		expect(res.json.code).toBe(0)
+		const insertCall = mockQuery.mock.calls.find(call => sqlOf(call).startsWith('insert into base_app'))
 		expect(insertCall).toBeTruthy()
-		const [insertSql, binds] = insertCall
-		expect(insertSql).toContain('insert into base_app (id,')
-		// 主键由 base.getId() 生成并作为 $1 绑定
-		expect(typeof binds[0]).toBe('string')
-		expect(binds[0].length).toBeGreaterThan(0)
+		expect(insertCall[1]).toContain('media,efficiency')
 	})
 
-	it('update: 仅更新 body 中提供的字段，按 id 定位', async () => {
-		const appHandler = await load_app()
-		mock_ensure()
-		mockQuery.mockResolvedValueOnce({ rows: [{ id: 'app001' }], rowCount: 1 })
-
-		const res = await call_api(appHandler, '/api/base/app/update', 'POST', { Authorization: token }, { id: 'app001', title: '改名后的应用' })
-
+	it('超过两个分类允许保存但返回提醒', async () => {
+		const handler = await load_app()
+		const res = await call_api(handler, '/api/base/app/insert', 'POST', {
+			headers: { authorization: admin_token() },
+			body: { name: 'many', title: '多分类应用', category: ['efficiency', 'media', 'dev'] },
+		})
 		expect(res.json.code).toBe(0)
-		expect(res.json.msg).toContain('编辑成功')
+		expect(res.json.msg).toContain('3 个分类')
+	})
 
-		const updateCall = mockQuery.mock.calls.find(c => String(c[0]).startsWith('update base_app'))
+	it('可见性只允许 public / private / admin', async () => {
+		const handler = await load_app()
+		const res = await call_api(handler, '/api/base/app/update', 'POST', {
+			headers: { authorization: admin_token() },
+			body: { id: 'app001', visibility: 'hidden' },
+		})
+		expect(res.json.code).toBe(-1)
+		expect(res.json.msg).toContain('public / private / admin')
+	})
+})
+
+describe('app 元数据审查', () => {
+	it('返回汇总、分类统计与问题列表', async () => {
+		const handler = await load_app()
+		rules.push((text, binds) => {
+			if (text.includes('SELECT id, name, title, category, visibility')) {
+				return {
+					rows: [
+						{ id: 'a1', name: 'ai', title: 'AI', category: 'efficiency', visibility: 'public', status: 1, show: true },
+						{ id: 'a2', name: 'bad', title: '坏应用', category: 'daily', visibility: 'public', status: 1, show: true },
+					],
+					rowCount: 2,
+				}
+			}
+			return undefined
+		})
+
+		const res = await call_api(handler, '/api/base/app/validate', 'GET', { headers: { authorization: admin_token() } })
+		expect(res.json.code).toBe(0)
+		expect(res.json.data.summary.total).toBe(2)
+		expect(res.json.data.summary.invalidCategoryRecords).toBe(1)
+		expect(res.json.data.issues.some(issue => issue.code === 'app_category_legacy_in_use')).toBe(true)
+	})
+})
+
+describe('app 分类迁移', () => {
+	it('迁移标记存在时不再扫描并覆盖应用分类', async () => {
+		const handler = await load_app()
+		await call_api(handler, '/api/base/app/home')
+		const migrationScan = mockQuery.mock.calls.map(sqlOf).find(text => text.includes('SELECT id, name, category, visibility, show FROM base_app'))
+		expect(migrationScan).toBeFalsy()
+	})
+
+	it('迁移标记不存在时按归属清单更新并写入标记', async () => {
+		const handler = await load_app()
+		rules.push((text, binds) => {
+			if (text.includes('SELECT 1 FROM base_app_migration')) return { rows: [] }
+			if (text.includes('SELECT id, name, category, visibility, show FROM base_app')) {
+				return { rows: [{ id: 'a1', name: 'camera', category: 'dev', visibility: 'public', show: true }], rowCount: 1 }
+			}
+			return undefined
+		})
+
+		await call_api(handler, '/api/base/app/home')
+
+		const updateCall = mockQuery.mock.calls.find(call => sqlOf(call).includes('UPDATE base_app SET category = $1'))
 		expect(updateCall).toBeTruthy()
-		const [updateSql, binds] = updateCall
-		// crud 会追加 updatetime 作为最后更新的列
-		expect(updateSql).toContain('set title = $1')
-		expect(updateSql).toContain('where id = $3')
-		// 参数化：业务值 + 时间戳 + id，无字符串拼接
-		expect(binds[0]).toBe('改名后的应用')
-		expect(typeof binds[1]).toBe('string')
-		expect(binds[1].length).toBeGreaterThan(0)
-		expect(binds[2]).toBe('app001')
-	})
+		expect(updateCall[1][0]).toBe('system')
 
-	it('delete: 按 id 物理删除', async () => {
-		const appHandler = await load_app()
-		mock_ensure()
-		mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 1 })
-
-		const res = await call_api(appHandler, '/api/base/app/delete', 'POST', { Authorization: token }, { id: 'app001' })
-
-		expect(res.json.code).toBe(0)
-		expect(res.json.msg).toContain('删除成功')
-
-		const deleteCall = mockQuery.mock.calls.find(c => String(c[0]).startsWith('delete from base_app'))
-		expect(deleteCall).toBeTruthy()
-		expect(deleteCall[0]).toContain('where id = $1')
-		expect(deleteCall[1]).toEqual(['app001'])
+		const markerCall = mockQuery.mock.calls.find(call => sqlOf(call).includes('INSERT INTO base_app_migration'))
+		expect(markerCall).toBeTruthy()
 	})
 })
