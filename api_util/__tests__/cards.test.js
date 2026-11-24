@@ -42,7 +42,7 @@ beforeEach(() => {
 
 		if (text.startsWith('CREATE TABLE') || text.startsWith('CREATE INDEX') || text.startsWith('ALTER TABLE')) return EMPTY
 		if (text.includes('INSERT INTO cards_content_version')) return EMPTY
-		if (text.includes('SELECT seed_version')) return { rows: [{ seed_version: '1' }] }
+		if (text.includes('SELECT seed_version')) return { rows: [{ seed_version: '3' }] }
 		if (text.includes('SELECT version, category_version')) return { rows: [{ version: '7', category_version: '1', item_version: '1', asset_version: '1' }] }
 		return EMPTY
 	})
@@ -129,12 +129,29 @@ describe('cards 公开内容接口', () => {
 		const categoryInserts = mockQuery.mock.calls.filter(call => sqlOf(call).includes('INSERT INTO cards_category'))
 		const itemInserts = mockQuery.mock.calls.filter(call => sqlOf(call).includes('INSERT INTO cards_item'))
 		expect(categoryInserts.length).toBe(9)
-		expect(itemInserts.length).toBe(130)
+		expect(itemInserts.length).toBe(174)
 		expect(sqlOf(categoryInserts[0])).toContain('ON CONFLICT DO NOTHING')
 		expect(sqlOf(itemInserts[0])).toContain('ON CONFLICT DO NOTHING')
 		expect(itemInserts[0][1][1]).toBe(seed_categories[0].id)
+		expect(mockQuery.mock.calls.some(call => sqlOf(call).includes('INSERT INTO cards_asset'))).toBe(true)
 		// 种子完成后写标记，避免管理员删除的内容被「数量不足」逻辑复活
-		const seedUpdate = mockQuery.mock.calls.find(call => sqlOf(call).includes('SET seed_version = 1'))
+		const seedUpdate = mockQuery.mock.calls.find(call => sqlOf(call).includes('SET seed_version = 3'))
+		expect(seedUpdate).toBeTruthy()
+	})
+
+	it('seed_version 为 2 时执行第三阶段迁移，幂等补齐 88 条语音资产', async () => {
+		const handler = await load_cards()
+		rules.push(text => {
+			if (text.includes('SELECT seed_version')) return { rows: [{ seed_version: '2' }] }
+			return undefined
+		})
+
+		await call_api(handler, '/api/cards/content/version', 'GET')
+
+		const assetInserts = mockQuery.mock.calls.filter(call => sqlOf(call).includes('INSERT INTO cards_asset'))
+		expect(assetInserts.length).toBe(88) // 仅插入 88 条语音资产，不重复插入 78 条 emoji 资产
+		expect(sqlOf(assetInserts[0])).toContain('ON CONFLICT DO NOTHING')
+		const seedUpdate = mockQuery.mock.calls.find(call => sqlOf(call).includes('SET seed_version = 3'))
 		expect(seedUpdate).toBeTruthy()
 	})
 
@@ -164,6 +181,14 @@ describe('cards 用户进度', () => {
 			if (text.includes('SELECT card_id, explored_at, last_explored_at, favorite_at') || text.includes('SELECT card_key')) {
 				return { rows: [{ card_id: 'animal_cat', explored_at: '2026-11-01 09:00:00', last_explored_at: '2026-11-02 09:00:00', favorite_at: null }] }
 			}
+			if (text.includes('SELECT play_mode, COUNT(*)')) {
+				return {
+					rows: [
+						{ play_mode: 'connect', count: '5' },
+						{ play_mode: 'memory', count: '2' },
+					],
+				}
+			}
 			return undefined
 		})
 
@@ -179,6 +204,7 @@ describe('cards 用户进度', () => {
 
 		expect(res.json.code).toBe(0)
 		expect(res.json.data.items[0].cardKey).toBe('animal_cat')
+		expect(res.json.data.playStats).toEqual({ connect: 5, memory: 2 })
 
 		const upserts = mockQuery.mock.calls.filter(call => sqlOf(call).includes('INSERT INTO cards_user_progress'))
 		expect(upserts).toHaveLength(1) // 同 key 去重
@@ -251,6 +277,40 @@ describe('cards 管理端', () => {
 		expect(mockQuery.mock.calls.some(call => sqlOf(call).startsWith('DELETE FROM cards_category'))).toBe(false)
 	})
 
+	it('卡片管理列表返回主图素材与排序权重', async () => {
+		const handler = await load_cards()
+		rules.push(text => {
+			if (text.includes('SELECT i.*, c.name AS category_name')) {
+				return {
+					rows: [
+						{
+							id: 'ci0001',
+							label: '小猫',
+							sort_order: 10,
+							primary_asset_type: 'image',
+							primary_asset_url: 'https://drive.zengjin.work/cat.webp',
+							primary_emoji: '',
+						},
+					],
+				}
+			}
+			if (text.includes('SELECT COUNT(*) AS total FROM cards_item')) return { rows: [{ total: '1' }] }
+			return undefined
+		})
+
+		const res = await call_api(handler, '/api/cards/admin/item/select', 'GET', {
+			headers: { Authorization: admin_token() },
+			query: { current: 1, pageSize: 20 },
+		})
+
+		expect(res.json.code).toBe(0)
+		expect(res.json.data[0].primary_asset_url).toBe('https://drive.zengjin.work/cat.webp')
+		expect(res.json.data[0].sort_order).toBe(10)
+		const selectCall = mockQuery.mock.calls.find(call => sqlOf(call).includes('SELECT i.*, c.name AS category_name'))
+		expect(sqlOf(selectCall)).toContain('primary_asset_url')
+		expect(sqlOf(selectCall)).toContain('ORDER BY c.sort_order ASC NULLS LAST, i.sort_order ASC')
+	})
+
 	it('新增卡片保存基本信息与适用玩法', async () => {
 		const handler = await load_cards()
 		rules.push((text, binds) => {
@@ -289,6 +349,11 @@ describe('cards 管理端', () => {
 		})
 
 		expect(res.json.code).toBe(0)
+		const updateCall = mockQuery.mock.calls.find(call => sqlOf(call).startsWith('UPDATE cards_item'))
+		expect(sqlOf(updateCall)).toContain('label = $1')
+		expect(sqlOf(updateCall)).toContain('WHERE id = $3')
+		expect(updateCall[1][0]).toBe('小猫')
+		expect(updateCall[1][2]).toBe('ci0001')
 		const deleteCall = mockQuery.mock.calls.find(call => sqlOf(call).startsWith('DELETE FROM cards_asset'))
 		expect(deleteCall[1]).toEqual(['ci0001'])
 		const insertCall = mockQuery.mock.calls.find(call => sqlOf(call).includes('INSERT INTO cards_asset'))

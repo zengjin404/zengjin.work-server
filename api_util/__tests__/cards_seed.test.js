@@ -7,23 +7,23 @@
  */
 import { describe, expect, it } from 'vitest'
 
-import { SEED_CATEGORY_COUNT, SEED_ITEM_COUNT, seed_categories, seed_items, validate_seed } from '#api_util/cards_seed.js'
+import { SEED_CATEGORY_COUNT, SEED_ITEM_COUNT, seed_animal_assets, seed_categories, seed_items, validate_seed } from '#api_util/cards_seed.js'
 
 describe('cards_seed — 初始内容', () => {
 	it('种子自检无错误', () => {
 		expect(validate_seed()).toEqual([])
 	})
 
-	it('包含 9 个核心分类与 130 张卡片', () => {
+	it('包含 9 个核心分类与 174 张卡片', () => {
 		expect(SEED_CATEGORY_COUNT).toBe(9)
 		expect(seed_categories).toHaveLength(9)
-		expect(SEED_ITEM_COUNT).toBe(130)
-		expect(seed_items).toHaveLength(130)
+		expect(SEED_ITEM_COUNT).toBe(174)
+		expect(seed_items).toHaveLength(174)
 	})
 
 	it('各分类卡片数量符合设计规范', () => {
 		const expectedCounts = {
-			动物: 15,
+			动物: 59,
 			食物: 24,
 			交通工具: 12,
 			生活用品: 14,
@@ -44,6 +44,18 @@ describe('cards_seed — 初始内容', () => {
 		const ids = new Set(seed_items.map(item => item.id))
 		expect(ids.size).toBe(seed_items.length)
 		expect(seed_items.every(item => item.id.length <= 20)).toBe(true)
+	})
+
+	it('包含 78 条动物 Emoji 初始视觉素材与 88 条录制语音资产', () => {
+		expect(seed_animal_assets).toHaveLength(166)
+		const assetIds = new Set(seed_animal_assets.map(a => a.id))
+		expect(assetIds.size).toBe(166)
+		const emojiAssets = seed_animal_assets.filter(a => a.asset_type === 'emoji')
+		const narrationAssets = seed_animal_assets.filter(a => a.asset_type === 'narration')
+		expect(emojiAssets).toHaveLength(78)
+		expect(narrationAssets).toHaveLength(88)
+		expect(narrationAssets.filter(a => a.metadata?.lang === 'zh')).toHaveLength(44)
+		expect(narrationAssets.filter(a => a.metadata?.lang === 'en')).toHaveLength(44)
 	})
 
 	it('中文卡拼音与英文完整', () => {

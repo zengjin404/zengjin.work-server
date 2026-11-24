@@ -14,7 +14,7 @@ import {
 	sanitize_progress_payload,
 	sanitize_text,
 } from '#api_util/cards_schema.js'
-import { seed_categories, seed_items } from '#api_util/cards_seed.js'
+import { seed_animal_assets, seed_categories, seed_items } from '#api_util/cards_seed.js'
 import db from '#api_util/db.js'
 
 /**
@@ -298,7 +298,92 @@ async function ensure_dbInitialized_async() {
 			)
 		}
 
-		await db.query(`UPDATE ${T_VERSION} SET seed_version = 1, updatetime = ${NOW_SQL} WHERE id = 'cards'`)
+		for (const asset of seed_animal_assets) {
+			await db.query(
+				`INSERT INTO ${T_ASSET}
+						(id, card_id, asset_type, asset_url, mime_type, sort_order, is_primary, is_enabled, is_random, metadata, createtime)
+					 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb, ${NOW_SQL})
+					 ON CONFLICT DO NOTHING`,
+				[
+					asset.id,
+					asset.card_id,
+					asset.asset_type,
+					asset.asset_url,
+					asset.mime_type,
+					asset.sort_order,
+					asset.is_primary,
+					asset.is_enabled !== false,
+					asset.is_random !== false,
+					JSON.stringify(asset.metadata || {}),
+				],
+			)
+		}
+
+		await db.query(`UPDATE ${T_VERSION} SET seed_version = 3, updatetime = ${NOW_SQL} WHERE id = 'cards'`)
+	} else if (seedVersion < 2) {
+		for (const item of seed_items) {
+			await db.query(
+				`INSERT INTO ${T_ITEM}
+						(id, category_id, label, pinyin, en_label, description, knowledge,
+						 play_modes, sort_order, is_enabled, publish_status, createtime)
+					 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, true, 1, ${NOW_SQL})
+					 ON CONFLICT DO NOTHING`,
+				[item.id, item.category_id, item.label, item.pinyin, item.en_label, item.description, item.knowledge, item.play_modes, item.sort_order],
+			)
+		}
+
+		for (const asset of seed_animal_assets) {
+			await db.query(
+				`INSERT INTO ${T_ASSET}
+						(id, card_id, asset_type, asset_url, mime_type, sort_order, is_primary, is_enabled, is_random, metadata, createtime)
+					 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb, ${NOW_SQL})
+					 ON CONFLICT DO NOTHING`,
+				[
+					asset.id,
+					asset.card_id,
+					asset.asset_type,
+					asset.asset_url,
+					asset.mime_type,
+					asset.sort_order,
+					asset.is_primary,
+					asset.is_enabled !== false,
+					asset.is_random !== false,
+					JSON.stringify(asset.metadata || {}),
+				],
+			)
+		}
+
+		await db.query(
+			`UPDATE ${T_VERSION} SET seed_version = 3, version = version + 1, item_version = item_version + 1, asset_version = asset_version + 1, updatetime = ${NOW_SQL} WHERE id = 'cards'`,
+		)
+		await resolve_content_gaps_after_change_async(['6d3t61fuevti'], 'animal_expansion')
+	} else if (seedVersion < 3) {
+		// 初始化阶段 3 (CARDS-ANIMALS-EXPANSION-03 闭环)：独立幂等补齐 88 条录制语音资产
+		const narrationAssets = seed_animal_assets.filter(a => a.asset_type === 'narration')
+		for (const asset of narrationAssets) {
+			await db.query(
+				`INSERT INTO ${T_ASSET}
+						(id, card_id, asset_type, asset_url, mime_type, sort_order, is_primary, is_enabled, is_random, metadata, createtime)
+					 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb, ${NOW_SQL})
+					 ON CONFLICT DO NOTHING`,
+				[
+					asset.id,
+					asset.card_id,
+					asset.asset_type,
+					asset.asset_url,
+					asset.mime_type,
+					asset.sort_order,
+					asset.is_primary,
+					asset.is_enabled !== false,
+					asset.is_random !== false,
+					JSON.stringify(asset.metadata || {}),
+				],
+			)
+		}
+
+		await db.query(
+			`UPDATE ${T_VERSION} SET seed_version = 3, version = version + 1, asset_version = asset_version + 1, updatetime = ${NOW_SQL} WHERE id = 'cards'`,
+		)
 	}
 
 	dbInitialized = true
@@ -347,6 +432,25 @@ async function read_progress_async(userId) {
 		lastExploredAt: row.last_explored_at || '',
 		favoriteAt: row.favorite_at || '',
 	}))
+}
+
+/** 读取某用户的玩法通关统计（用于成长与成就） */
+async function read_play_stats_async(userId) {
+	if (!userId) return { connect: 0, memory: 0 }
+	const { rows } = await db.query(
+		`SELECT play_mode, COUNT(*)::int AS count
+		 FROM ${T_PLAY}
+		 WHERE user_id = $1 AND result = 'completed'
+		 GROUP BY play_mode`,
+		[userId],
+	)
+	const stats = { connect: 0, memory: 0 }
+	for (const row of rows || []) {
+		if (row.play_mode === 'connect' || row.play_mode === 'memory') {
+			stats[row.play_mode] = Number(row.count) || 0
+		}
+	}
+	return stats
 }
 
 /** 分页参数（管理端表格） */
@@ -447,15 +551,15 @@ routes['post:cards_progress:sync'] = requireAuth(async ({ req, body }) => {
 		)
 	}
 
-	const merged = await read_progress_async(userId)
-	return base.respSuccess({ msg: '同步成功', data: { items: merged, serverTime: base.getTime() } })
+	const [merged, playStats] = await Promise.all([read_progress_async(userId), read_play_stats_async(userId)])
+	return base.respSuccess({ msg: '同步成功', data: { items: merged, playStats, serverTime: base.getTime() } })
 })
 
 // GET /api/cards/progress/list
 routes['get:cards_progress:list'] = requireAuth(async ({ req }) => {
 	const userId = req.user?.userId
-	const items = await read_progress_async(userId)
-	return base.respSuccess({ msg: '查询成功', data: { items } })
+	const [items, playStats] = await Promise.all([read_progress_async(userId), read_play_stats_async(userId)])
+	return base.respSuccess({ msg: '查询成功', data: { items, playStats } })
 })
 
 // POST /api/cards/progress/favorite
@@ -726,7 +830,7 @@ routes['get:cards_admin_item:select'] = requireAdmin(async ({ query }) => {
 	const binds = []
 	if (keyword) {
 		binds.push(`%${keyword}%`)
-		wheres.push(`(i.label ILIKE ${binds.length} OR i.pinyin ILIKE ${binds.length})`)
+		wheres.push(`(i.label ILIKE $${binds.length} OR i.pinyin ILIKE $${binds.length})`)
 	}
 	if (categoryId) {
 		binds.push(categoryId)
@@ -744,7 +848,22 @@ routes['get:cards_admin_item:select'] = requireAdmin(async ({ query }) => {
 
 	const [listRes, countRes] = await Promise.all([
 		db.query(
-			`SELECT i.*, c.name AS category_name, c.sort_order AS category_sort
+			`SELECT i.*, c.name AS category_name, c.sort_order AS category_sort,
+			        (SELECT a.asset_type
+			         FROM ${T_ASSET} a
+			         WHERE a.card_id = i.id AND a.is_enabled = true AND a.asset_type IN ('image', 'thumbnail', 'emoji')
+			         ORDER BY a.is_primary DESC, a.sort_order ASC, a.createtime ASC
+			         LIMIT 1) AS primary_asset_type,
+			        (SELECT a.asset_url
+			         FROM ${T_ASSET} a
+			         WHERE a.card_id = i.id AND a.is_enabled = true AND a.asset_type IN ('image', 'thumbnail', 'emoji')
+			         ORDER BY a.is_primary DESC, a.sort_order ASC, a.createtime ASC
+			         LIMIT 1) AS primary_asset_url,
+			        (SELECT COALESCE(a.metadata->>'emoji', CASE WHEN a.asset_type = 'emoji' THEN REPLACE(a.asset_url, 'emoji:', '') ELSE '' END)
+			         FROM ${T_ASSET} a
+			         WHERE a.card_id = i.id AND a.is_enabled = true AND a.asset_type IN ('image', 'thumbnail', 'emoji')
+			         ORDER BY a.is_primary DESC, a.sort_order ASC, a.createtime ASC
+			         LIMIT 1) AS primary_emoji
 			 FROM ${T_ITEM} i
 			 LEFT JOIN ${T_CATEGORY} c ON c.id = i.category_id
 			 ${whereStr}
@@ -845,7 +964,7 @@ routes['post:cards_admin_item:update'] = requireAdmin(async ({ body }) => {
 	const binds = []
 	for (const field of fields) {
 		binds.push(payload[field])
-		updates.push(`${field} = ${binds.length}`)
+		updates.push(`${field} = $${binds.length}`)
 	}
 	if (updates.length) {
 		binds.push(base.getTime())

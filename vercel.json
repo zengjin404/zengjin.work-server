@@ -42,6 +42,7 @@
 
 		{ "source": "/:app/sw.js", "destination": "/apps/:app/sw.js" },
 		{ "source": "/:app/assets/:path*", "destination": "/apps/:app/assets/:path*" },
+		{ "source": "/:app/audio/:path*", "destination": "/apps/:app/audio/:path*" },
 		{ "source": "/:app/:path*", "destination": "/apps/:app/index.html" },
 
 		{ "source": "/:path*", "destination": "/apps/404/index.html" }
