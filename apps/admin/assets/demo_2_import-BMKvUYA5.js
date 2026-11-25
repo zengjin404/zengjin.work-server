@@ -1,0 +1,1 @@
+import{$r as e,xi as t}from"./index-BC0UemJP.js";import n from"./demo_2-DMIes38E.js";var r={__name:`demo_2_import`,setup(r){return(r,i)=>(t(),e(n,{h1:`demo_2_import`}))}};export{r as default};

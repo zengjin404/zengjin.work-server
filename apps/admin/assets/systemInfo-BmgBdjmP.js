@@ -1,0 +1,1 @@
+import{Qr as e,ti as t,w as n,xi as r}from"./index-BC0UemJP.js";var i=n(Object.assign({name:Math.random().toString(36).slice(2)},{__name:`index`,setup(n){return(n,i)=>(r(),t(`section`,null,[...i[0]||=[e(`h1`,null,`系统状态`,-1)]]))}}),[[`__scopeId`,`data-v-b6874561`]]);export{i as default};
