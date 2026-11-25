@@ -1,1 +1,0 @@
-import{Ii as e,ei as t,ti as n,vi as r,xi as i}from"./index-BC0UemJP.js";var a={class:`Monitor`},o=[`src`],s={__name:`Monitor`,props:{url:{type:String,default:``}},setup(s){let c=s;return e(``),r(()=>{}),(e,r)=>(i(),n(`div`,a,[c.url?(i(),n(`iframe`,{key:0,src:`plugin/JnWebPlayer/play_url.html?url=${c.url}`},null,8,o)):t(`v-if`,!0)]))}};export{s as default};

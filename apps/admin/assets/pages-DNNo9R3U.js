@@ -1,0 +1,1 @@
+import{Bi as e,Qr as t,Wi as n,m as r,p as i,ti as a,w as o,xi as s}from"./index-Do50ZgC1.js";var c={class:`_panel`},l=o({__name:`index`,setup(o){let l=$config.title;return r(),i(),(r,i)=>(s(),a(`section`,c,[t(`h1`,null,n(e(l)),1)]))}},[[`__scopeId`,`data-v-01b76bb3`]]);export{l as default};

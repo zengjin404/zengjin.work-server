@@ -1,1 +1,0 @@
-import{Bi as e,D as t,Ii as n,Ui as r,ti as i,vi as a,wi as o,xi as s}from"./index-BC0UemJP.js";var c=[`theme`],l={__name:`Stamp`,props:{theme:{type:String,default:`default`}},setup(l){let u=t(),d=l;return n(),a(()=>{}),(t,n)=>(s(),i(`div`,{class:`Stamp`,theme:e(u).theme,style:r(`color: var(--${d.theme})`)},[o(t.$slots,`default`)],12,c))}};export{l as t};

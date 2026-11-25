@@ -1,1 +1,0 @@
-import{Qr as e,Wi as t,ti as n,xi as r}from"./index-BC0UemJP.js";var i={__name:`demo_2`,props:[`h1`],setup(i){let a=i;return(i,o)=>(r(),n(`section`,null,[e(`h1`,null,t(a.h1||`demo_2`),1),o[0]||=e(`input`,null,null,-1)]))}};export{i as default};

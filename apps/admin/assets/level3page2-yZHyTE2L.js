@@ -1,1 +1,0 @@
-import{Qr as e,Yr as t,ti as n,xi as r}from"./index-BC0UemJP.js";var i=Object.assign({name:Math.random().toString(36).slice(2)},{__name:`level3page2`,setup(i){return(i,a)=>(r(),n(t,null,[a[0]||=e(`h1`,null,`level3page2.vue`,-1),a[1]||=e(`input`,null,null,-1)],64))}});export{i as default};
