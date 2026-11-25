@@ -512,7 +512,7 @@ actions.get.categories = async () => {
 // 对齐前台展现及管理端多维排序口径
 actions.get.validate = requireAdmin(async () => {
 	const { rows } = await db.query(
-		`SELECT id, name, title, category, visibility, status, show, featured, sort FROM base_app ORDER BY featured DESC, show DESC, status DESC, sort DESC, name ASC`
+		`SELECT id, name, title, category, visibility, status, show, featured, sort FROM base_app ORDER BY featured DESC, show DESC, status DESC, sort DESC, name ASC`,
 	)
 	const report = audit_app_catalog(base.formatDbRows(rows || []))
 	return base.respSuccess({ msg: '审查完成', data: report })

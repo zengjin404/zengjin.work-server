@@ -18,6 +18,10 @@
 					"value": "X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization"
 				}
 			]
+		},
+		{
+			"source": "/cards/sw.js",
+			"headers": [{ "key": "Service-Worker-Allowed", "value": "/cards" }]
 		}
 	],
 

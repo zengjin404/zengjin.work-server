@@ -1,9 +1,18 @@
 import qiniu from 'qiniu'
 
-// 七牛云全局配置
-const accessKey = 'H1c7CF285tnZrwxglB3aTj_yuHHHEW8NDnke15Kc'
-const secretKey = 'MkuFpwMfrwpeQG4UNn6s1ksWXBI94H7cJnUjVpHF'
-const mac = new qiniu.auth.digest.Mac(accessKey, secretKey)
+// 七牛云全局配置（凭证只从环境变量读取，缺失时在首次使用时明确报错）
+let mac = null
+
+function getMac() {
+	if (mac) return mac
+	const accessKey = process.env.QINIU_ACCESS_KEY
+	const secretKey = process.env.QINIU_SECRET_KEY
+	if (!accessKey || !secretKey) {
+		throw new Error('缺少七牛云配置：请设置 QINIU_ACCESS_KEY 与 QINIU_SECRET_KEY')
+	}
+	mac = new qiniu.auth.digest.Mac(accessKey, secretKey)
+	return mac
+}
 
 // 桶名称映射
 const bucketMap = {
@@ -29,7 +38,7 @@ const getConfig = () => {
 	return config
 }
 
-const getBucketManager = () => new qiniu.rs.BucketManager(mac, getConfig())
+const getBucketManager = () => new qiniu.rs.BucketManager(getMac(), getConfig())
 
 /**
  * 获取上传凭证
@@ -42,7 +51,7 @@ const getUploadToken = (bucketKey, options = {}) => {
 		...options,
 	})
 	return {
-		token: putPolicy.uploadToken(mac),
+		token: putPolicy.uploadToken(getMac()),
 		bucket: bucketName,
 		domain: domainMap[bucketKey] || domainMap[bucketName] || `https://${bucketKey}.zengjin.work`,
 		expires: 3600,
@@ -63,6 +72,22 @@ const listFiles = (bucketKey, { prefix = '', marker = '', limit = 100, delimiter
 			} else {
 				reject(new Error(`Qiniu Error: ${respInfo.statusCode}`))
 			}
+		})
+	})
+}
+
+/**
+ * 查询单个文件元信息（不存在时返回 null）
+ */
+const statFile = (bucketKey, key) => {
+	const bucketName = getBucketName(bucketKey)
+	const bucketManager = getBucketManager()
+	return new Promise((resolve, reject) => {
+		bucketManager.stat(bucketName, key, (err, respBody, respInfo) => {
+			if (err) return reject(err)
+			if (respInfo.statusCode === 200) return resolve(respBody)
+			if (respInfo.statusCode === 612 || respInfo.statusCode === 404) return resolve(null)
+			reject(new Error(`Qiniu Error: ${respInfo.statusCode}`))
 		})
 	})
 }
@@ -156,7 +181,7 @@ const createFolder = (bucketKey, prefix) => {
 			scope: bucketName,
 		}
 		const putPolicy = new qiniu.rs.PutPolicy(options)
-		const uploadToken = putPolicy.uploadToken(mac)
+		const uploadToken = putPolicy.uploadToken(getMac())
 		const config = getConfig()
 		const formUploader = new qiniu.form_up.FormUploader(config)
 		const putExtra = new qiniu.form_up.PutExtra()
@@ -175,6 +200,7 @@ const createFolder = (bucketKey, prefix) => {
 export default {
 	getUploadToken,
 	listFiles,
+	statFile,
 	deleteFile,
 	moveFile,
 	copyFile,

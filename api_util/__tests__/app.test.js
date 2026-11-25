@@ -95,7 +95,7 @@ describe('app.get.home — 公开应用清单', () => {
 		expect(res.json.data).toHaveLength(1)
 		const homeSql = mockQuery.mock.calls.map(sqlOf).find(text => text.includes('WHERE show = true'))
 		expect(homeSql).toContain(`COALESCE(visibility, 'public') = 'public'`)
-		expect(homeSql).toContain('ORDER BY featured DESC, sort ASC, createtime ASC')
+		expect(homeSql).toContain('ORDER BY featured DESC, sort DESC, createtime ASC')
 	})
 })
 
@@ -106,7 +106,7 @@ describe('app 管理端 — 鉴权', () => {
 		expect(res.status).toBe(401)
 	})
 
-	it('管理员查询按排序权重升序，同权重按应用标识排序', async () => {
+	it('管理员查询按排序权重降序，同权重按应用标识排序', async () => {
 		const handler = await load_app()
 		rules.push((text, binds) => {
 			if (text.includes('from base_app') && text.includes('limit')) return { rows: [], rowCount: 0 }
@@ -118,7 +118,9 @@ describe('app 管理端 — 鉴权', () => {
 
 		expect(res.json.code).toBe(0)
 		const selectSql = mockQuery.mock.calls.map(sqlOf).find(text => text.includes('from base_app') && text.includes('limit'))
-		expect(selectSql.toLowerCase()).toContain('order by base_app.sort asc, base_app.name asc')
+		expect(selectSql.toLowerCase()).toContain(
+			'order by base_app.featured desc, base_app.show desc, base_app.status desc, base_app.sort desc, base_app.name asc',
+		)
 	})
 
 	it('普通登录用户查询返回 403', async () => {

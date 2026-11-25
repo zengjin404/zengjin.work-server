@@ -98,10 +98,7 @@ actions.post.config = requireAuth(async () => {
 
 	// 若为合并模式（通常在未登录转为已登录的初次同步触发），执行去重合并
 	if (syncMode === 'merge') {
-		const { rows } = await db.query(
-			`SELECT favorites, recents, config FROM ${TABLE} WHERE user_id = $1`,
-			[userId],
-		)
+		const { rows } = await db.query(`SELECT favorites, recents, config FROM ${TABLE} WHERE user_id = $1`, [userId])
 
 		if (rows.length) {
 			const dbFavs = Array.isArray(rows[0].favorites) ? rows[0].favorites : []
@@ -132,13 +129,7 @@ actions.post.config = requireAuth(async () => {
 			config = EXCLUDED.config,
 			updatetime = (now() AT TIME ZONE 'Asia/Shanghai')
 		 RETURNING favorites, recents, config, updatetime`,
-		[
-			base.getId(),
-			userId,
-			JSON.stringify(finalFavs),
-			JSON.stringify(finalRecents),
-			JSON.stringify(finalConfig),
-		],
+		[base.getId(), userId, JSON.stringify(finalFavs), JSON.stringify(finalRecents), JSON.stringify(finalConfig)],
 	)
 
 	const saved = upsertRows[0] || {}

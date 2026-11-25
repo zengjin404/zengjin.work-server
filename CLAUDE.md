@@ -2,7 +2,7 @@
 
 ## 常用命令
 
-- 测试：`bun test` / `bun test:watch`
+- 测试：`bun run test` / `bun run test:watch`
 - 格式：`bun format:check` / `bun format`
 - 本地调试：`bun serve`（端口见 `../zengjin.work-source/docs/_deployment.md`）
 
@@ -39,6 +39,6 @@
 ## 仓库协约
 
 - 包管理器：Bun；`bun.lock` 纳入版本控制，变更依赖时同步提交。
-- 质量门禁：GitHub Actions 执行 `bun install` + `bun format:check` + `bun test`，不执行 build。
+- 质量门禁：GitHub Actions 执行 `bun install` + `bun format:check` + `bun run test`，不执行 build。
 - 生产部署：由 Vercel 负责构建；CI 不产出构建产物。
 - 提交前至少运行 `bun format:check`；行为变更需补测试。

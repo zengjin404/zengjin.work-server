@@ -125,19 +125,23 @@ const actions = {
 					if (onlineIds.length === 0) {
 						wheres.push('1 = 0')
 					} else {
-						const placeholders = onlineIds.map(id => {
-							binds.push(id)
-							return `$${binds.length}`
-						}).join(',')
+						const placeholders = onlineIds
+							.map(id => {
+								binds.push(id)
+								return `$${binds.length}`
+							})
+							.join(',')
 						wheres.push(`id IN (${placeholders})`)
 					}
 				} else if (isOnline === 0) {
 					// 仅查询离线用户：如果有人在线，使用 NOT IN
 					if (onlineIds.length > 0) {
-						const placeholders = onlineIds.map(id => {
-							binds.push(id)
-							return `$${binds.length}`
-						}).join(',')
+						const placeholders = onlineIds
+							.map(id => {
+								binds.push(id)
+								return `$${binds.length}`
+							})
+							.join(',')
 						wheres.push(`id NOT IN (${placeholders})`)
 					}
 				}
