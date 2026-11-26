@@ -1,0 +1,1 @@
+import{Yr as e,_i as t}from"./index-BqETJdWy.js";import n from"./pages--WPvs4e1.js";var r={__name:`index`,setup(r){return(r,i)=>(t(),e(n))}};export{r as default};

@@ -28,7 +28,7 @@ function getPoolConfig(key) {
 		user: process.env[`${prefix}USER`],
 		password: process.env[`${prefix}PASSWORD`],
 		database: process.env[`${prefix}NAME`] || 'postgres',
-		max: 10,
+		max: Number(process.env.DB_POOL_MAX || 10),
 		idleTimeoutMillis: 10000, // 10秒空闲主动回收，防止复用已被云端 PgBouncer 掐断的死连接
 		connectionTimeoutMillis: 5000,
 		keepAlive: true,
@@ -93,7 +93,7 @@ const db = getPool(DEFAULT_KEY)
 
 // 打印当前主库状态
 if (db) {
-	const isProd = process.env.NODE_ENV === 'production' && process.env.VERCEL_ENV === 'production'
+	const isProd = process.env.APP_ENV === 'production' || (process.env.NODE_ENV === 'production' && process.env.VERCEL_ENV === 'production')
 	console.log(`数据库就绪: [${DEFAULT_KEY}] | 环境: ${isProd ? '生产' : '开发'}`)
 }
 

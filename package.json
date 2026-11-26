@@ -11,16 +11,17 @@
 		"preview": "node ./vite.preview.js",
 		"test": "vitest run",
 		"test:watch": "vitest",
-		"format": "prettier --write \"api_util/**/*.js\" \"api/**/*.js\" \"*.json\" \"*.mjs\" \"*.js\"",
-		"format:check": "prettier --check \"api_util/**/*.js\" \"api/**/*.js\" \"*.json\" \"*.mjs\" \"*.js\""
+		"edgeone:prepare": "node scripts/prepare-edgeone.mjs",
+		"edgeone:verify": "node scripts/verify-edgeone-dist.mjs",
+		"edgeone:bundle": "node scripts/bundle-edgeone-function.mjs",
+		"format": "prettier --write \"api_util/**/*.js\" \"api/**/*.js\" \"scripts/**/*.mjs\" \"cloud-functions/**/*.js\" \"*.json\" \"*.mjs\" \"*.js\"",
+		"format:check": "prettier --check \"api_util/**/*.js\" \"api/**/*.js\" \"scripts/**/*.mjs\" \"cloud-functions/**/*.js\" \"*.json\" \"*.mjs\" \"*.js\""
 	},
 	"dependencies": {
 		"@alicloud/credentials": "^2.4.7",
 		"@alicloud/dypnsapi20170525": "^2.0.0",
 		"@alicloud/openapi-client": "^0.4.15",
 		"@alicloud/tea-util": "^1.4.11",
-		"@supabase/supabase-js": "^2.93.3",
-		"@vercel/node": "^2.15.1",
 		"altcha-lib": "^2.0.3",
 		"dayjs": "^1.11.13",
 		"express": "^4.21.2",
@@ -30,7 +31,6 @@
 		"pg": "^8.14.1",
 		"qiniu": "^7.15.1",
 		"swagger-jsdoc": "^6.2.8",
-		"swagger-ui-express": "^5.0.1",
 		"tencentcloud-sdk-nodejs-tmt": "^4.1.117"
 	},
 	"devDependencies": {

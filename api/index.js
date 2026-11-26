@@ -13,12 +13,10 @@ import userHandler from './_base/user.js'
 import wsdemoHandler from './_base/wsdemo.js'
 import cardsHandler from './_cards.js'
 import demoHandler from './_demo.js'
-import docHandler from './_doc.js'
 import dphxbHandler from './_dphxb.js'
 import faHandler from './_fa.js'
 import fcHandler from './_fc.js'
 import fileHandler from './_file.js'
-import firebaseHandler from './_firebase.js'
 import jndvHandler from './_jndv.js'
 import musicHandler from './_music.js'
 import noteHandler from './_note.js'
@@ -40,6 +38,11 @@ export default async function masterHandler(req, res) {
 		// array 的截取获得后面的动作 ['mzl', 'student', 'select']
 		const fullAction = segments.slice(2)
 
+		// 平台可能不预解析 query（例如裸 Node 运行时）；补齐后再挂 action
+		if (!req.query || typeof req.query !== 'object') {
+			req.query = Object.fromEntries(new URL(req.url, 'http://localhost').searchParams)
+		}
+
 		// 把 action 参数挂在 req.query 上，完美兼容内部 _demo 等已经成型的结构
 		req.query.action = fullAction
 
@@ -51,8 +54,11 @@ export default async function masterHandler(req, res) {
 				case 'demo':
 					return await demoHandler(req, res)
 
-				case 'firebase':
+				case 'firebase': {
+					// Firebase 已封版且 firebase-admin 体积大，按需加载，避免进入冷启动主路径
+					const { default: firebaseHandler } = await import('./_firebase.js')
 					return await firebaseHandler(req, res)
+				}
 
 				case 'base':
 					const subModule = fullAction[1] // 例如 'login' 或者是 'dict'
@@ -94,8 +100,11 @@ export default async function masterHandler(req, res) {
 				case 'file':
 					return await fileHandler(req, res)
 
-				case 'doc':
+				case 'doc': {
+					// 文档模块会读取包内静态文件，按需加载，避免影响其他 API 冷启动
+					const { default: docHandler } = await import('./_doc.js')
 					return await docHandler(req, res)
+				}
 
 				case 'dphxb':
 					return await dphxbHandler(req, res)

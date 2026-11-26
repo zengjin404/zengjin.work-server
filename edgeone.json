@@ -1,0 +1,537 @@
+{
+	"buildCommand": "bun scripts/prepare-edgeone.mjs",
+	"installCommand": "bun install --frozen-lockfile --production",
+	"outputDirectory": "edgeone-dist",
+	"nodeVersion": "20.18.0",
+	"cloudFunctions": {
+		"nodejs": {
+			"maxDuration": 120
+		}
+	},
+	"redirects": [
+		{
+			"source": "/index",
+			"destination": "/",
+			"statusCode": 301
+		},
+		{
+			"source": "/index/",
+			"destination": "/",
+			"statusCode": 301
+		}
+	],
+	"rewrites": [
+		{
+			"source": "/",
+			"destination": "/index.html"
+		},
+		{
+			"source": "/404/assets/*",
+			"destination": "/404/assets/:splat"
+		},
+		{
+			"source": "/404/audio/*",
+			"destination": "/404/audio/:splat"
+		},
+		{
+			"source": "/404/sw.js",
+			"destination": "/404/sw.js"
+		},
+		{
+			"source": "/404",
+			"destination": "/404/index.html"
+		},
+		{
+			"source": "/404/",
+			"destination": "/404/index.html"
+		},
+		{
+			"source": "/404/*",
+			"destination": "/404/index.html"
+		},
+		{
+			"source": "/admin/assets/*",
+			"destination": "/admin/assets/:splat"
+		},
+		{
+			"source": "/admin/audio/*",
+			"destination": "/admin/audio/:splat"
+		},
+		{
+			"source": "/admin/sw.js",
+			"destination": "/admin/sw.js"
+		},
+		{
+			"source": "/admin",
+			"destination": "/admin/index.html"
+		},
+		{
+			"source": "/admin/",
+			"destination": "/admin/index.html"
+		},
+		{
+			"source": "/admin/*",
+			"destination": "/admin/index.html"
+		},
+		{
+			"source": "/ai/assets/*",
+			"destination": "/ai/assets/:splat"
+		},
+		{
+			"source": "/ai/audio/*",
+			"destination": "/ai/audio/:splat"
+		},
+		{
+			"source": "/ai/sw.js",
+			"destination": "/ai/sw.js"
+		},
+		{
+			"source": "/ai",
+			"destination": "/ai/index.html"
+		},
+		{
+			"source": "/ai/",
+			"destination": "/ai/index.html"
+		},
+		{
+			"source": "/ai/*",
+			"destination": "/ai/index.html"
+		},
+		{
+			"source": "/camera",
+			"destination": "/camera/index.html"
+		},
+		{
+			"source": "/camera/",
+			"destination": "/camera/index.html"
+		},
+		{
+			"source": "/cards/assets/*",
+			"destination": "/cards/assets/:splat"
+		},
+		{
+			"source": "/cards/audio/*",
+			"destination": "/cards/audio/:splat"
+		},
+		{
+			"source": "/cards/sw.js",
+			"destination": "/cards/sw.js"
+		},
+		{
+			"source": "/cards",
+			"destination": "/cards/index.html"
+		},
+		{
+			"source": "/cards/",
+			"destination": "/cards/index.html"
+		},
+		{
+			"source": "/cards/*",
+			"destination": "/cards/index.html"
+		},
+		{
+			"source": "/case/assets/*",
+			"destination": "/case/assets/:splat"
+		},
+		{
+			"source": "/case/audio/*",
+			"destination": "/case/audio/:splat"
+		},
+		{
+			"source": "/case/sw.js",
+			"destination": "/case/sw.js"
+		},
+		{
+			"source": "/case",
+			"destination": "/case/index.html"
+		},
+		{
+			"source": "/case/",
+			"destination": "/case/index.html"
+		},
+		{
+			"source": "/case/*",
+			"destination": "/case/index.html"
+		},
+		{
+			"source": "/char",
+			"destination": "/char/index.html"
+		},
+		{
+			"source": "/char/",
+			"destination": "/char/index.html"
+		},
+		{
+			"source": "/color/assets/*",
+			"destination": "/color/assets/:splat"
+		},
+		{
+			"source": "/color/audio/*",
+			"destination": "/color/audio/:splat"
+		},
+		{
+			"source": "/color/sw.js",
+			"destination": "/color/sw.js"
+		},
+		{
+			"source": "/color",
+			"destination": "/color/index.html"
+		},
+		{
+			"source": "/color/",
+			"destination": "/color/index.html"
+		},
+		{
+			"source": "/color/*",
+			"destination": "/color/index.html"
+		},
+		{
+			"source": "/cursor",
+			"destination": "/cursor/index.html"
+		},
+		{
+			"source": "/cursor/",
+			"destination": "/cursor/index.html"
+		},
+		{
+			"source": "/demo",
+			"destination": "/demo/index.html"
+		},
+		{
+			"source": "/demo/",
+			"destination": "/demo/index.html"
+		},
+		{
+			"source": "/fa",
+			"destination": "/fa/index.html"
+		},
+		{
+			"source": "/fa/",
+			"destination": "/fa/index.html"
+		},
+		{
+			"source": "/fa6",
+			"destination": "/fa6/index.html"
+		},
+		{
+			"source": "/fa6/",
+			"destination": "/fa6/index.html"
+		},
+		{
+			"source": "/gis/assets/*",
+			"destination": "/gis/assets/:splat"
+		},
+		{
+			"source": "/gis/audio/*",
+			"destination": "/gis/audio/:splat"
+		},
+		{
+			"source": "/gis/sw.js",
+			"destination": "/gis/sw.js"
+		},
+		{
+			"source": "/gis",
+			"destination": "/gis/index.html"
+		},
+		{
+			"source": "/gis/",
+			"destination": "/gis/index.html"
+		},
+		{
+			"source": "/gis/*",
+			"destination": "/gis/index.html"
+		},
+		{
+			"source": "/jndv/assets/*",
+			"destination": "/jndv/assets/:splat"
+		},
+		{
+			"source": "/jndv/audio/*",
+			"destination": "/jndv/audio/:splat"
+		},
+		{
+			"source": "/jndv/sw.js",
+			"destination": "/jndv/sw.js"
+		},
+		{
+			"source": "/jndv",
+			"destination": "/jndv/index.html"
+		},
+		{
+			"source": "/jndv/",
+			"destination": "/jndv/index.html"
+		},
+		{
+			"source": "/jndv/*",
+			"destination": "/jndv/index.html"
+		},
+		{
+			"source": "/key",
+			"destination": "/key/index.html"
+		},
+		{
+			"source": "/key/",
+			"destination": "/key/index.html"
+		},
+		{
+			"source": "/llq",
+			"destination": "/llq/index.html"
+		},
+		{
+			"source": "/llq/",
+			"destination": "/llq/index.html"
+		},
+		{
+			"source": "/mic",
+			"destination": "/mic/index.html"
+		},
+		{
+			"source": "/mic/",
+			"destination": "/mic/index.html"
+		},
+		{
+			"source": "/on",
+			"destination": "/on/index.html"
+		},
+		{
+			"source": "/on/",
+			"destination": "/on/index.html"
+		},
+		{
+			"source": "/qjt/assets/*",
+			"destination": "/qjt/assets/:splat"
+		},
+		{
+			"source": "/qjt/audio/*",
+			"destination": "/qjt/audio/:splat"
+		},
+		{
+			"source": "/qjt/sw.js",
+			"destination": "/qjt/sw.js"
+		},
+		{
+			"source": "/qjt",
+			"destination": "/qjt/index.html"
+		},
+		{
+			"source": "/qjt/",
+			"destination": "/qjt/index.html"
+		},
+		{
+			"source": "/qjt/*",
+			"destination": "/qjt/index.html"
+		},
+		{
+			"source": "/qrcode",
+			"destination": "/qrcode/index.html"
+		},
+		{
+			"source": "/qrcode/",
+			"destination": "/qrcode/index.html"
+		},
+		{
+			"source": "/seal",
+			"destination": "/seal/index.html"
+		},
+		{
+			"source": "/seal/",
+			"destination": "/seal/index.html"
+		},
+		{
+			"source": "/share/assets/*",
+			"destination": "/share/assets/:splat"
+		},
+		{
+			"source": "/share/audio/*",
+			"destination": "/share/audio/:splat"
+		},
+		{
+			"source": "/share/sw.js",
+			"destination": "/share/sw.js"
+		},
+		{
+			"source": "/share",
+			"destination": "/share/index.html"
+		},
+		{
+			"source": "/share/",
+			"destination": "/share/index.html"
+		},
+		{
+			"source": "/share/*",
+			"destination": "/share/index.html"
+		},
+		{
+			"source": "/storage",
+			"destination": "/storage/index.html"
+		},
+		{
+			"source": "/storage/",
+			"destination": "/storage/index.html"
+		},
+		{
+			"source": "/sub",
+			"destination": "/sub/index.html"
+		},
+		{
+			"source": "/sub/",
+			"destination": "/sub/index.html"
+		},
+		{
+			"source": "/tileset",
+			"destination": "/tileset/index.html"
+		},
+		{
+			"source": "/tileset/",
+			"destination": "/tileset/index.html"
+		},
+		{
+			"source": "/time",
+			"destination": "/time/index.html"
+		},
+		{
+			"source": "/time/",
+			"destination": "/time/index.html"
+		}
+	],
+	"headers": [
+		{
+			"source": "/*",
+			"headers": [
+				{
+					"key": "Access-Control-Allow-Origin",
+					"value": "*"
+				},
+				{
+					"key": "Access-Control-Allow-Methods",
+					"value": "GET,POST"
+				},
+				{
+					"key": "Access-Control-Allow-Headers",
+					"value": "X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization"
+				}
+			]
+		},
+		{
+			"source": "/cards/sw.js",
+			"headers": [
+				{
+					"key": "Service-Worker-Allowed",
+					"value": "/cards"
+				},
+				{
+					"key": "Cache-Control",
+					"value": "no-cache"
+				}
+			]
+		},
+		{
+			"source": "/cards/index.html",
+			"headers": [
+				{
+					"key": "Cache-Control",
+					"value": "no-cache"
+				}
+			]
+		},
+		{
+			"source": "/*.glb",
+			"headers": [
+				{
+					"key": "Content-Type",
+					"value": "model/gltf-binary"
+				}
+			]
+		},
+		{
+			"source": "/*.jsonl",
+			"headers": [
+				{
+					"key": "Content-Type",
+					"value": "application/x-ndjson"
+				}
+			]
+		},
+		{
+			"source": "/*.task",
+			"headers": [
+				{
+					"key": "Content-Type",
+					"value": "application/octet-stream"
+				}
+			]
+		},
+		{
+			"source": "/*.tflite",
+			"headers": [
+				{
+					"key": "Content-Type",
+					"value": "application/octet-stream"
+				}
+			]
+		},
+		{
+			"source": "/*.bcmap",
+			"headers": [
+				{
+					"key": "Content-Type",
+					"value": "application/octet-stream"
+				}
+			]
+		},
+		{
+			"source": "/*.ftl",
+			"headers": [
+				{
+					"key": "Content-Type",
+					"value": "application/octet-stream"
+				}
+			]
+		},
+		{
+			"source": "/*.nes",
+			"headers": [
+				{
+					"key": "Content-Type",
+					"value": "application/octet-stream"
+				}
+			]
+		},
+		{
+			"source": "/*.mjs",
+			"headers": [
+				{
+					"key": "Content-Type",
+					"value": "text/javascript; charset=utf-8"
+				}
+			]
+		},
+		{
+			"source": "/*.wasm",
+			"headers": [
+				{
+					"key": "Content-Type",
+					"value": "application/wasm"
+				}
+			]
+		},
+		{
+			"source": "/*.woff2",
+			"headers": [
+				{
+					"key": "Content-Type",
+					"value": "font/woff2"
+				}
+			]
+		}
+	],
+	"schedules": [
+		{
+			"name": "supabase-keepalive",
+			"cron": "0 3 * * *",
+			"path": "/api/base/keepalive/supabase",
+			"method": "GET",
+			"timezone": "Asia/Shanghai"
+		}
+	]
+}

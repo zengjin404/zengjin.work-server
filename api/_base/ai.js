@@ -140,6 +140,8 @@ async function ensure_dbInitialized_async() {
 	`)
 
 	// 插入默认预设模型 (如果为空)
+	// 预设只保留模型结构；API Key 必须在 Admin → AI 服务商中配置。
+	// 不要把真实 Key 写进源码/Git；历史上的 Key 已随前端构建公开，需在服务商侧轮换。
 	const countRes = await db.query('SELECT COUNT(*) FROM base_ai')
 	if (parseInt(countRes.rows[0].count) === 0) {
 		const presets = [
@@ -149,7 +151,7 @@ async function ensure_dbInitialized_async() {
 				'DeepSeek v4 Pro',
 				'openai',
 				'https://api.deepseek.com/chat/completions',
-				'sk-6accace0d21247ba9260e07ab7c3cfc4',
+				'',
 				'deepseek-v4-pro',
 				'DeepSeek V4 Pro 旗舰模型',
 				1,
@@ -162,7 +164,7 @@ async function ensure_dbInitialized_async() {
 				'DeepSeek v4 Flash',
 				'openai',
 				'https://api.deepseek.com/chat/completions',
-				'sk-6accace0d21247ba9260e07ab7c3cfc4',
+				'',
 				'deepseek-v4-flash',
 				'DeepSeek V4 Flash 快速响应模型',
 				1,
@@ -175,7 +177,7 @@ async function ensure_dbInitialized_async() {
 				'Agnes 2.0 Flash',
 				'openai',
 				'https://apihub.agnes-ai.com/v1/chat/completions',
-				'sk-h3yBwXGzolLZ1wqmz5ZpY5xW5Xy7vrbsqYGaElM2E8h1EFFQ',
+				'',
 				'agnes-2.0-flash',
 				'Agnes AI 快速闪电模型',
 				1,
@@ -183,25 +185,13 @@ async function ensure_dbInitialized_async() {
 				30,
 				1,
 			],
-			[
-				'nex-n2-pro',
-				'Nex N2 Pro',
-				'openai',
-				'https://api.deepseek.com/chat/completions',
-				'sk-wxicemrpvaokztekssdrytrzrogdvopemsqbozfljhpcgdrx',
-				'nex-agi/Nex-N2-Pro',
-				'Nex AGI 智能推理模型',
-				1,
-				1,
-				40,
-				3,
-			],
+			['nex-n2-pro', 'Nex N2 Pro', 'openai', 'https://api.deepseek.com/chat/completions', '', 'nex-agi/Nex-N2-Pro', 'Nex AGI 智能推理模型', 1, 1, 40, 3],
 			[
 				'deepseek-r1-qwen-8b',
 				'DeepSeek R1 Qwen 8B',
 				'openai',
 				'https://api.deepseek.com/chat/completions',
-				'sk-wxicemrpvaokztekssdrytrzrogdvopemsqbozfljhpcgdrx',
+				'',
 				'deepseek-ai/DeepSeek-R1-0528-Qwen3-8B',
 				'DeepSeek R1 Qwen3 8B 蒸馏推理模型',
 				1,
@@ -214,7 +204,7 @@ async function ensure_dbInitialized_async() {
 				'Qwen 3.5 4B',
 				'openai',
 				'https://api.deepseek.com/chat/completions',
-				'sk-wxicemrpvaokztekssdrytrzrogdvopemsqbozfljhpcgdrx',
+				'',
 				'Qwen/Qwen3.5-4B',
 				'通义千问 Qwen3.5 4B 基础模型',
 				1,
@@ -227,7 +217,7 @@ async function ensure_dbInitialized_async() {
 				'Hunyuan MT 7B',
 				'openai',
 				'https://api.deepseek.com/chat/completions',
-				'sk-wxicemrpvaokztekssdrytrzrogdvopemsqbozfljhpcgdrx',
+				'',
 				'tencent/Hunyuan-MT-7B',
 				'腾讯混元多语言 Hunyuan MT 7B',
 				1,
@@ -240,7 +230,7 @@ async function ensure_dbInitialized_async() {
 				'BGE M3',
 				'openai',
 				'https://api.deepseek.com/chat/completions',
-				'sk-wxicemrpvaokztekssdrytrzrogdvopemsqbozfljhpcgdrx',
+				'',
 				'BAAI/bge-m3',
 				'北京人工智能研究院 BGE M3 向量/多功能模型',
 				1,

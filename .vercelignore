@@ -1,0 +1,10 @@
+# EdgeOne Makers 专用文件：不参与 Vercel 部署
+edgeone-dist/
+edgeone-function-dist/
+edgeone-manifest.json
+edgeone.json
+cloud-functions/
+scripts/
+
+# 说明：不要忽略 api/、api_util/、apps/、$base/、$apps/ 或根图标，
+# 否则会破坏 Vercel 当前静态站点与 Serverless 函数。

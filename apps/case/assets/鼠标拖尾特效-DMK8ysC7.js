@@ -1,0 +1,1 @@
+import{Ii as e,Jr as t,Li as n,Zr as r,_i as i,l as a,mi as o}from"./index-BqETJdWy.js";var s=a({__name:`鼠标拖尾特效`,setup(a){return e({}),n(),o(()=>{}),(e,n)=>(i(),r(`section`,null,[...n[0]||=[t(`iframe`,{src:`/$apps/case/交互效果/鼠标拖尾特效/`},null,-1)]]))}},[[`__scopeId`,`data-v-2df355ea`]]);export{s as default};

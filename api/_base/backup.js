@@ -1,7 +1,8 @@
 import crypto from 'node:crypto'
 
-import { checkAuth } from '#api_util/auth_middleware.js'
+import { verifyAuth } from '#api_util/auth_middleware.js'
 import base from '#api_util/base.js'
+import { is_cron_authorized } from '#api_util/cron_auth.js'
 import { getPool } from '#api_util/db.js'
 
 // 本接口专用：执行主备双写更新日志
@@ -48,7 +49,15 @@ const GATE_AUTH_ID = '__auth_gate'
 const GATE_POOL_ID = '__pool_gate'
 
 // 尽力写一条 status=2 诊断标记
+// 未授权请求可被扫描器放大为持续 DB 写入；按实例节流，10 分钟内最多写一次。
+let lastGateMarkAt = 0
+const GATE_MARK_MIN_INTERVAL = 10 * 60 * 1000
+
 async function writeGateMark(logObj, markId, reason) {
+	const nowMs = Date.now()
+	if (nowMs - lastGateMarkAt < GATE_MARK_MIN_INTERVAL) return
+	lastGateMarkAt = nowMs
+
 	const now = base.getTime()
 	const pools = [getPool(logObj.source), getPool(logObj.target)].filter(Boolean)
 	for (const pool of pools) {
@@ -1485,23 +1494,31 @@ export default async (req, resp) => {
 		extra: {},
 	}
 
-	// 1. 鉴权：生产环境下进行双通道校验 (Vercel Cron 校验 或 用户登录 Token 校验)
-	const isProd = process.env.NODE_ENV === 'production'
-	const authHeader = req.headers.authorization || req.headers.Authorization
-	if (isProd) {
-		let isAuthorized = false
-		// 通道一：Vercel Cron 自动定时任务校验
-		if (authHeader === `Bearer ${process.env.CRON_SECRET}`) {
-			isAuthorized = true
-		}
-		// 通道二：系统已登录管理用户的 Token 校验 (支持 admin 管理端手动触发)
-		if (!isAuthorized) {
-			const isUserAuth = await checkAuth(req, resp)
-			if (!isUserAuth) {
+	// 1. 鉴权：平台中立双通道
+	//    - 定时任务：Bearer（Vercel Cron）/ x-cron-secret / query / body（EdgeOne schedules）
+	//    - 人工触发：已登录用户的 Bearer Access Token
+	// CRON_SECRET 未配置时 fail-closed，绝不接受 "Bearer undefined"。
+	const cronAuth = is_cron_authorized(req)
+	if (!cronAuth.ok) {
+		const user = await verifyAuth(req)
+		if (!user?.userId) {
+			try {
 				await writeGateMark(logObj, GATE_AUTH_ID, '鉴权失败：缺少或错误的 CRON_SECRET / 登录令牌')
-				return
+			} catch (gateError) {
+				console.error('[备份引擎 V2] 写鉴权失败标记失败:', gateError.message)
 			}
-			isAuthorized = true
+			resp.status(401).json({ code: -1, msg: '未授权：缺少有效 CRON_SECRET 或登录令牌' })
+			return
+		}
+		// 备份是破坏性运维操作，只允许内置管理员人工触发；普通登录用户不得触发
+		if (user.username !== 'admin') {
+			try {
+				await writeGateMark(logObj, GATE_AUTH_ID, '鉴权失败：非管理员尝试触发备份')
+			} catch (gateError) {
+				console.error('[备份引擎 V2] 写鉴权失败标记失败:', gateError.message)
+			}
+			resp.status(403).json({ code: -1, msg: '无操作权限：仅系统管理员可触发备份' })
+			return
 		}
 	}
 

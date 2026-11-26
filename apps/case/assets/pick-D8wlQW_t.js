@@ -1,0 +1,1 @@
+import{Fn as e,Qn as t,fr as n,gr as r,hr as i}from"./index-BqETJdWy.js";function a(t,n,a){for(var o=-1,s=n.length,c={};++o<s;){var l=n[o],u=i(t,l);a(u,l)&&e(c,r(l,t),u)}return c}function o(e,n){return a(e,n,function(n,r){return t(e,r)})}var s=n(function(e,t){return e==null?{}:o(e,t)});export{s as t};

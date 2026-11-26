@@ -1,0 +1,1 @@
+import{Gr as e,Ii as t,Jr as n,Zr as r,_i as i,l as a,ti as o}from"./index-BqETJdWy.js";import{t as s}from"./Precode-DkGskwix.js";var c=a({__name:`打字机`,setup(a){return t({}),(t,a)=>(i(),r(e,null,[a[0]||=n(`section`,null,[n(`p`,null,`中文效果比较完美，英文a效果b不c理想`)],-1),o(s,{url:`/case/pages/其他css相关/打字机.vue`})],64))}},[[`__scopeId`,`data-v-688da042`]]);export{c as default};

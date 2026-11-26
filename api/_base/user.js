@@ -2,6 +2,7 @@ import jwt from 'jsonwebtoken'
 
 import { requireAuth } from '#api_util/auth_middleware.js'
 import base from '#api_util/base.js'
+import { clear_refresh_cookie, refresh_cookie } from '#api_util/cookie.js'
 import { decryptPassword, encryptPassword, hashToken } from '#api_util/crypto.js'
 import db from '#api_util/db.js'
 import { generateAccessToken, generateRefreshToken } from '#api_util/jwt.js'
@@ -302,7 +303,7 @@ const actions = {
 
 			const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
 			const userAgent = req.headers['user-agent'] || ''
-			const ipAddress = req.headers['x-forwarded-for'] || req.socket.remoteAddress || ''
+			const ipAddress = req.headers['x-forwarded-for'] || req.socket?.remoteAddress || ''
 
 			try {
 				await db.query(
@@ -313,15 +314,7 @@ const actions = {
 				console.error('保存 session 失败:', err)
 			}
 
-			const isProd = process.env.NODE_ENV === 'production' && process.env.VERCEL_ENV === 'production'
-			const cookieOptions = [
-				`refreshToken=${refreshToken}`,
-				'HttpOnly',
-				'Path=/',
-				`Max-Age=${7 * 24 * 60 * 60}`,
-				isProd ? 'SameSite=None; Secure' : 'SameSite=Lax',
-			].join('; ')
-			resp.setHeader('Set-Cookie', cookieOptions)
+			resp.setHeader('Set-Cookie', refresh_cookie(refreshToken, 7 * 24 * 60 * 60, req))
 
 			const formattedUser = base.formatDbRows(users)[0]
 			return base.respSuccess({
@@ -360,7 +353,7 @@ const actions = {
 				}
 			}
 
-			resp.setHeader('Set-Cookie', 'refreshToken=; HttpOnly; Path=/; Max-Age=0')
+			resp.setHeader('Set-Cookie', clear_refresh_cookie(req))
 			return base.respSuccess({ msg: '退出成功' })
 		},
 
@@ -374,8 +367,7 @@ const actions = {
 				.find(c => c.trim().startsWith('refreshToken='))
 				?.split('=')[1]
 
-			const isProd = process.env.NODE_ENV === 'production' && process.env.VERCEL_ENV === 'production'
-			const clearCookie = ['refreshToken=', 'HttpOnly', 'Path=/', 'Max-Age=0', isProd ? 'SameSite=None; Secure' : 'SameSite=Lax'].join('; ')
+			const clearCookie = clear_refresh_cookie(req)
 
 			if (!refreshToken) {
 				resp.setHeader('Set-Cookie', clearCookie)
@@ -434,21 +426,14 @@ const actions = {
 						newTokenHash,
 						expiresAt.toISOString(),
 						req.headers['user-agent'] || '',
-						req.headers['x-forwarded-for'] || req.socket.remoteAddress || '',
+						req.headers['x-forwarded-for'] || req.socket?.remoteAddress || '',
 					],
 				)
 			} catch (err) {
 				console.error('保存 session 失败:', err)
 			}
 
-			const cookieOptions = [
-				`refreshToken=${newRefreshToken}`,
-				'HttpOnly',
-				'Path=/',
-				`Max-Age=${7 * 24 * 60 * 60}`,
-				isProd ? 'SameSite=None; Secure' : 'SameSite=Lax',
-			].join('; ')
-			resp.setHeader('Set-Cookie', cookieOptions)
+			resp.setHeader('Set-Cookie', refresh_cookie(newRefreshToken, 7 * 24 * 60 * 60, req))
 
 			return base.respSuccess({ msg: '刷新成功', data: { token: newAccessToken } })
 		},
@@ -902,7 +887,7 @@ const actions = {
 
 				const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
 				const userAgent = req.headers['user-agent'] || ''
-				const ipAddress = req.headers['x-forwarded-for'] || req.socket.remoteAddress || ''
+				const ipAddress = req.headers['x-forwarded-for'] || req.socket?.remoteAddress || ''
 
 				try {
 					await db.query(
@@ -913,15 +898,7 @@ const actions = {
 					console.error('保存 session 失败:', err)
 				}
 
-				const isProd = process.env.NODE_ENV === 'production' && process.env.VERCEL_ENV === 'production'
-				const cookieOptions = [
-					`refreshToken=${refreshToken}`,
-					'HttpOnly',
-					'Path=/',
-					`Max-Age=${7 * 24 * 60 * 60}`,
-					isProd ? 'SameSite=None; Secure' : 'SameSite=Lax',
-				].join('; ')
-				resp.setHeader('Set-Cookie', cookieOptions)
+				resp.setHeader('Set-Cookie', refresh_cookie(refreshToken, 7 * 24 * 60 * 60, req))
 
 				return base.respSuccess({
 					msg: '注册成功',

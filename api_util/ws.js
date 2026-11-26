@@ -1,6 +1,4 @@
-import fetch from 'node-fetch'
-
-// Vercel Node 环境通常自带 fetch，但若低于 v18 可按需补充，这里采用兼容写法
+// Node 18+/20+ 自带全局 fetch，不再依赖未声明的 node-fetch
 
 // 使用用户的 Rest key (建议后续将密钥移至环境变量 .env 中，此处为演示直接声明)
 const GOEASY_REST_KEY = 'PR-3b4ced7910ca461085b8937f9893a1c3'
@@ -25,7 +23,10 @@ export const publish_message_ws = async (channel, payload) => {
 
 	try {
 		// Node 环境自带原生 fetch，如需老版本兼容可引入对应 polyfill
-		const globalFetch = typeof fetch !== 'undefined' ? fetch : (await import('node-fetch')).default
+		const globalFetch = globalThis.fetch
+		if (typeof globalFetch !== 'function') {
+			throw new Error('当前 Node 运行时缺少全局 fetch，请使用 Node 18+')
+		}
 
 		const response = await globalFetch(GOEASY_HOST, {
 			method: 'POST',
@@ -37,6 +38,7 @@ export const publish_message_ws = async (channel, payload) => {
 				channel: channel,
 				content: typeof payload === 'string' ? payload : JSON.stringify(payload),
 			}),
+			signal: typeof AbortSignal?.timeout === 'function' ? AbortSignal.timeout(10000) : undefined,
 		})
 
 		const result = await response.json()

@@ -1,4 +1,5 @@
 import base from '#api_util/base.js'
+import { is_cron_authorized } from '#api_util/cron_auth.js'
 import curd from '#api_util/crud.js'
 import { getPool } from '#api_util/db.js'
 
@@ -56,6 +57,12 @@ actions.get.supabase = async options => {
 export default async (req, resp) => {
 	base.req = req
 	base.resp = resp
+
+	// 默认保持匿名可执行（兼容现有 Vercel Cron）。
+	// EdgeOne 上如需收紧，设置 KEEPALIVE_REQUIRE_AUTH=1，并通过 x-cron-secret/payload 传密钥。
+	if (process.env.KEEPALIVE_REQUIRE_AUTH === '1' && !is_cron_authorized(req).ok) {
+		return resp.status(401).json({ code: -1, msg: '未授权：保活任务需要有效 CRON_SECRET' })
+	}
 
 	const { table, method, action, query, body } = base.getReqInfo()
 

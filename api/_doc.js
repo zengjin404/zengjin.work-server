@@ -2,14 +2,30 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import swaggerJsdoc from 'swagger-jsdoc'
 
 /**
  * 兼容 ESM 的 __dirname 实现
+ *
+ * 注意：不要在模块顶层读取 package.json / swagger HTML。
+ * EdgeOne Cloud Functions 会把入口打成单文件，运行时并不保留这些源文件；
+ * 顶层同步读取会直接让整个函数冷启动失败。
  */
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
-const packageJson = JSON.parse(fs.readFileSync(path.join(__dirname, '../package.json'), 'utf8'))
+
+function read_doc_file(relative) {
+	try {
+		return fs.readFileSync(path.join(__dirname, relative), 'utf8')
+	} catch {
+		return null
+	}
+}
+
+function send_unavailable(res, message) {
+	res.statusCode = 503
+	res.setHeader('Content-Type', 'application/json; charset=utf-8')
+	res.end(JSON.stringify({ code: -1, msg: message }))
+}
 
 /**
  * 文档入口配置
@@ -28,7 +44,7 @@ const docs = {
  * @param {import('http').IncomingMessage} req Node/Vercel 请求对象
  * @param {import('http').ServerResponse} res Node/Vercel 响应对象
  */
-export default function main(req, res) {
+export default async function main(req, res) {
 	try {
 		// 解析 Cookies 并校验密码
 		const cookies = parseCookies(req)
@@ -58,11 +74,12 @@ export default function main(req, res) {
 
 		// 未登录且不是 swagger-ui 静态资源时，返回登录页
 		if (!action && password !== correctPassword && !req.url.includes('plugin/')) {
-			// 读取并回填登录页
-			const loginHtml = fs.readFileSync(path.join(__dirname, '_base/swagger_login.html'), 'utf8').replace('${correctPassword}', correctPassword)
+			// 读取并回填登录页；单文件运行时可能没有该文件
+			const loginHtml = read_doc_file('_base/swagger_login.html')
+			if (!loginHtml) return send_unavailable(res, 'Swagger 登录页未随函数打包，请下线该文档端点或改用 includeFiles')
 
 			res.setHeader('Content-Type', 'text/html; charset=utf-8')
-			res.end(loginHtml)
+			res.end(loginHtml.replace('${correctPassword}', correctPassword))
 			return
 		}
 
@@ -71,7 +88,7 @@ export default function main(req, res) {
 		console.log('Docs config:', docs)
 
 		// 生成 swagger.json
-		const swaggerSpec = action && docs[action] ? createSwaggerSpec(action) : createSwaggerSpec()
+		const swaggerSpec = action && docs[action] ? await createSwaggerSpec(action) : await createSwaggerSpec()
 
 		// 如果是请求 swagger.json，返回 JSON；否则返回 HTML 页面
 		if (isSwaggerJson) {
@@ -79,7 +96,8 @@ export default function main(req, res) {
 			res.setHeader('Access-Control-Allow-Origin', '*')
 			res.end(JSON.stringify(swaggerSpec))
 		} else {
-			const html = fs.readFileSync(path.join(__dirname, '_base/swagger.html'), 'utf8')
+			const html = read_doc_file('_base/swagger.html')
+			if (!html) return send_unavailable(res, 'Swagger 页面未随函数打包，请下线该文档端点或改用 includeFiles')
 			res.setHeader('Content-Type', 'text/html; charset=utf-8')
 			res.end(html)
 		}
@@ -122,7 +140,7 @@ function parseCookies(req) {
  * @param {string} [action]
  * @returns {import('openapi-types').OpenAPIV3.Document}
  */
-function createSwaggerSpec(action) {
+async function createSwaggerSpec(action) {
 	// apiPath：当前文件所在的 /api 目录
 	const apiPath = path.join(__dirname)
 
@@ -157,6 +175,7 @@ function createSwaggerSpec(action) {
 	}
 
 	try {
+		const { default: swaggerJsdoc } = await import('swagger-jsdoc')
 		const spec = swaggerJsdoc(options)
 		return spec
 	} catch (error) {
@@ -195,6 +214,7 @@ function getLocalIP() {
  */
 function getPortFromPackageJson() {
 	try {
+		const packageJson = JSON.parse(fs.readFileSync(path.join(__dirname, '../package.json'), 'utf8'))
 		const serveScript = packageJson?.scripts?.serve || ''
 		const portMatch = serveScript.match(/--listen\s+[0-9.]+:(\d+)/)
 		if (portMatch && portMatch[1]) return portMatch[1]
