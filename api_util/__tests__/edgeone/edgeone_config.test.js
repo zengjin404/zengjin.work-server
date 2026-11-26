@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 
-import { HISTORY_APPS } from '../../static_routes.js'
+import { HISTORY_APPS, build_rewrite_table, inspect_app_assets } from '../../static_routes.js'
 
 const CONFIG_PATH = path.resolve(process.cwd(), 'edgeone.json')
 
@@ -22,23 +22,36 @@ describe('edgeone.json 配置契约', () => {
 		expect(config.redirects.length).toBeLessThanOrEqual(100)
 	})
 
-	it('每个 History 应用都有深链回退，且 destination 不含 /apps/', async () => {
+	it('每个 History 应用都有深链回退，特殊资源按真实存在按需生成且顺序在前', async () => {
 		const config = JSON.parse(await readFile(CONFIG_PATH, 'utf8'))
 		const sources = new Set(config.rewrites.map(rule => rule.source))
 		for (const app of HISTORY_APPS) {
+			const flags = inspect_app_assets(app)
 			expect(sources.has(`/${app}/*`)).toBe(true)
-			expect(sources.has(`/${app}/assets/*`)).toBe(true)
-			expect(sources.has(`/${app}/audio/*`)).toBe(true)
-			expect(sources.has(`/${app}/sw.js`)).toBe(true)
-			const assetIndex = config.rewrites.findIndex(rule => rule.source === `/${app}/assets/*`)
 			const pageIndex = config.rewrites.findIndex(rule => rule.source === `/${app}/*`)
-			expect(assetIndex).toBeLessThan(pageIndex)
+
+			if (flags.assets) {
+				expect(sources.has(`/${app}/assets/*`)).toBe(true)
+				const assetIndex = config.rewrites.findIndex(rule => rule.source === `/${app}/assets/*`)
+				expect(assetIndex).toBeLessThan(pageIndex)
+			}
+			expect(sources.has(`/${app}/audio/*`)).toBe(flags.audio)
+			if (flags.audio) {
+				const audioIndex = config.rewrites.findIndex(rule => rule.source === `/${app}/audio/*`)
+				expect(audioIndex).toBeLessThan(pageIndex)
+			}
+			expect(sources.has(`/${app}/sw.js`)).toBe(flags.sw)
+			if (flags.sw) {
+				const swIndex = config.rewrites.findIndex(rule => rule.source === `/${app}/sw.js`)
+				expect(swIndex).toBeLessThan(pageIndex)
+			}
 		}
 		for (const rule of config.rewrites) {
 			expect(rule.source.startsWith('/')).toBe(true)
 			expect((rule.source.match(/\*/g) || []).length).toBeLessThanOrEqual(1)
 			expect(rule.destination).not.toContain('/apps/')
 		}
+		expect(config.rewrites).toEqual(build_rewrite_table())
 	})
 
 	it('默认不使用 /* 兜底，避免把不存在的 .js 返回成 HTML', async () => {

@@ -30,14 +30,6 @@
 			"destination": "/404/assets/:splat"
 		},
 		{
-			"source": "/404/audio/*",
-			"destination": "/404/audio/:splat"
-		},
-		{
-			"source": "/404/sw.js",
-			"destination": "/404/sw.js"
-		},
-		{
 			"source": "/404",
 			"destination": "/404/index.html"
 		},
@@ -52,14 +44,6 @@
 		{
 			"source": "/admin/assets/*",
 			"destination": "/admin/assets/:splat"
-		},
-		{
-			"source": "/admin/audio/*",
-			"destination": "/admin/audio/:splat"
-		},
-		{
-			"source": "/admin/sw.js",
-			"destination": "/admin/sw.js"
 		},
 		{
 			"source": "/admin",
@@ -78,14 +62,6 @@
 			"destination": "/ai/assets/:splat"
 		},
 		{
-			"source": "/ai/audio/*",
-			"destination": "/ai/audio/:splat"
-		},
-		{
-			"source": "/ai/sw.js",
-			"destination": "/ai/sw.js"
-		},
-		{
 			"source": "/ai",
 			"destination": "/ai/index.html"
 		},
@@ -96,14 +72,6 @@
 		{
 			"source": "/ai/*",
 			"destination": "/ai/index.html"
-		},
-		{
-			"source": "/camera",
-			"destination": "/camera/index.html"
-		},
-		{
-			"source": "/camera/",
-			"destination": "/camera/index.html"
 		},
 		{
 			"source": "/cards/assets/*",
@@ -134,14 +102,6 @@
 			"destination": "/case/assets/:splat"
 		},
 		{
-			"source": "/case/audio/*",
-			"destination": "/case/audio/:splat"
-		},
-		{
-			"source": "/case/sw.js",
-			"destination": "/case/sw.js"
-		},
-		{
 			"source": "/case",
 			"destination": "/case/index.html"
 		},
@@ -154,24 +114,8 @@
 			"destination": "/case/index.html"
 		},
 		{
-			"source": "/char",
-			"destination": "/char/index.html"
-		},
-		{
-			"source": "/char/",
-			"destination": "/char/index.html"
-		},
-		{
 			"source": "/color/assets/*",
 			"destination": "/color/assets/:splat"
-		},
-		{
-			"source": "/color/audio/*",
-			"destination": "/color/audio/:splat"
-		},
-		{
-			"source": "/color/sw.js",
-			"destination": "/color/sw.js"
 		},
 		{
 			"source": "/color",
@@ -184,6 +128,86 @@
 		{
 			"source": "/color/*",
 			"destination": "/color/index.html"
+		},
+		{
+			"source": "/gis/assets/*",
+			"destination": "/gis/assets/:splat"
+		},
+		{
+			"source": "/gis",
+			"destination": "/gis/index.html"
+		},
+		{
+			"source": "/gis/",
+			"destination": "/gis/index.html"
+		},
+		{
+			"source": "/gis/*",
+			"destination": "/gis/index.html"
+		},
+		{
+			"source": "/jndv/assets/*",
+			"destination": "/jndv/assets/:splat"
+		},
+		{
+			"source": "/jndv",
+			"destination": "/jndv/index.html"
+		},
+		{
+			"source": "/jndv/",
+			"destination": "/jndv/index.html"
+		},
+		{
+			"source": "/jndv/*",
+			"destination": "/jndv/index.html"
+		},
+		{
+			"source": "/qjt/assets/*",
+			"destination": "/qjt/assets/:splat"
+		},
+		{
+			"source": "/qjt",
+			"destination": "/qjt/index.html"
+		},
+		{
+			"source": "/qjt/",
+			"destination": "/qjt/index.html"
+		},
+		{
+			"source": "/qjt/*",
+			"destination": "/qjt/index.html"
+		},
+		{
+			"source": "/share/assets/*",
+			"destination": "/share/assets/:splat"
+		},
+		{
+			"source": "/share",
+			"destination": "/share/index.html"
+		},
+		{
+			"source": "/share/",
+			"destination": "/share/index.html"
+		},
+		{
+			"source": "/share/*",
+			"destination": "/share/index.html"
+		},
+		{
+			"source": "/camera",
+			"destination": "/camera/index.html"
+		},
+		{
+			"source": "/camera/",
+			"destination": "/camera/index.html"
+		},
+		{
+			"source": "/char",
+			"destination": "/char/index.html"
+		},
+		{
+			"source": "/char/",
+			"destination": "/char/index.html"
 		},
 		{
 			"source": "/cursor",
@@ -218,54 +242,6 @@
 			"destination": "/fa6/index.html"
 		},
 		{
-			"source": "/gis/assets/*",
-			"destination": "/gis/assets/:splat"
-		},
-		{
-			"source": "/gis/audio/*",
-			"destination": "/gis/audio/:splat"
-		},
-		{
-			"source": "/gis/sw.js",
-			"destination": "/gis/sw.js"
-		},
-		{
-			"source": "/gis",
-			"destination": "/gis/index.html"
-		},
-		{
-			"source": "/gis/",
-			"destination": "/gis/index.html"
-		},
-		{
-			"source": "/gis/*",
-			"destination": "/gis/index.html"
-		},
-		{
-			"source": "/jndv/assets/*",
-			"destination": "/jndv/assets/:splat"
-		},
-		{
-			"source": "/jndv/audio/*",
-			"destination": "/jndv/audio/:splat"
-		},
-		{
-			"source": "/jndv/sw.js",
-			"destination": "/jndv/sw.js"
-		},
-		{
-			"source": "/jndv",
-			"destination": "/jndv/index.html"
-		},
-		{
-			"source": "/jndv/",
-			"destination": "/jndv/index.html"
-		},
-		{
-			"source": "/jndv/*",
-			"destination": "/jndv/index.html"
-		},
-		{
 			"source": "/key",
 			"destination": "/key/index.html"
 		},
@@ -298,30 +274,6 @@
 			"destination": "/on/index.html"
 		},
 		{
-			"source": "/qjt/assets/*",
-			"destination": "/qjt/assets/:splat"
-		},
-		{
-			"source": "/qjt/audio/*",
-			"destination": "/qjt/audio/:splat"
-		},
-		{
-			"source": "/qjt/sw.js",
-			"destination": "/qjt/sw.js"
-		},
-		{
-			"source": "/qjt",
-			"destination": "/qjt/index.html"
-		},
-		{
-			"source": "/qjt/",
-			"destination": "/qjt/index.html"
-		},
-		{
-			"source": "/qjt/*",
-			"destination": "/qjt/index.html"
-		},
-		{
 			"source": "/qrcode",
 			"destination": "/qrcode/index.html"
 		},
@@ -336,30 +288,6 @@
 		{
 			"source": "/seal/",
 			"destination": "/seal/index.html"
-		},
-		{
-			"source": "/share/assets/*",
-			"destination": "/share/assets/:splat"
-		},
-		{
-			"source": "/share/audio/*",
-			"destination": "/share/audio/:splat"
-		},
-		{
-			"source": "/share/sw.js",
-			"destination": "/share/sw.js"
-		},
-		{
-			"source": "/share",
-			"destination": "/share/index.html"
-		},
-		{
-			"source": "/share/",
-			"destination": "/share/index.html"
-		},
-		{
-			"source": "/share/*",
-			"destination": "/share/index.html"
 		},
 		{
 			"source": "/storage",

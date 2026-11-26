@@ -1,15 +1,21 @@
 /**
  * 多子应用静态路由决策
  *
- * 与前端实际路由模式对应（2026-11-26 实测构建产物）：
+ * 与前端实际路由模式对应（以 apps/<app> 实际磁盘资源或显式配置为依据）：
  *  - History：404 / admin / ai / cards / case / color / gis / jndv / qjt / share
  *  - Hash 或单页：其余已构建子应用
  *  - index 是首页，单独映射到根 index.html
- *  - music 当前无 index.html，属于部分产物，不参与回退
  *
- * 注意：这里只生成“页面型”回退规则，不生成 assets/audio 的身份重写。
- * 普通 rewrite 与静态资源的优先级 EdgeOne 官方未明确；POC 必须先验证 G1。
+ * 注意：
+ *  - G1 防护：普通 rewrite 与静态资源的优先级 EdgeOne 官方未明确，
+ *    因此为 History 应用保留 /app/assets/* 身份重写，并按实际存在情况
+ *    仅对真正拥有 audio/ 或 sw.js 的应用生成对应规则。
  */
+import { existsSync } from 'node:fs'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+const DEFAULT_APPS_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../apps')
 
 export const ROOT_APP = 'index'
 export const NOT_FOUND_APP = '404'
@@ -32,8 +38,31 @@ export const MIME_EXTENSIONS = {
 }
 
 function page_apps(apps) {
-	// 404 也是 History 应用，需要自己的深链回退；只有根应用单独映射到 /
-	return apps.filter(app => app !== ROOT_APP)
+	// 404 也是 History 应用，需要自己的深链回退；同时去重避免重复生成同一应用规则；只有根应用单独映射到 /
+	return [...new Set(apps)].filter(app => app !== ROOT_APP)
+}
+
+/**
+ * 依据实际应用目录或显式配置，判定应用需要生成的特殊资源身份重写开关
+ * @param {string} app
+ * @param {{ apps_dir?: string, app_assets?: Record<string, { assets?: boolean, audio?: boolean, sw?: boolean }> }} [options]
+ * @returns {{ assets: boolean, audio: boolean, sw: boolean }}
+ */
+export function inspect_app_assets(app, options = {}) {
+	const explicit = options.app_assets?.[app]
+	const appsDir = options.apps_dir || DEFAULT_APPS_DIR
+	const appDir = path.join(appsDir, app)
+	const hasAppDir = existsSync(appDir)
+
+	const hasAssets = typeof explicit?.assets === 'boolean' ? explicit.assets : hasAppDir ? existsSync(path.join(appDir, 'assets')) : true
+	const hasAudio = typeof explicit?.audio === 'boolean' ? explicit.audio : hasAppDir && existsSync(path.join(appDir, 'audio'))
+	const hasSw = typeof explicit?.sw === 'boolean' ? explicit.sw : hasAppDir && existsSync(path.join(appDir, 'sw.js'))
+
+	return {
+		assets: Boolean(hasAssets),
+		audio: Boolean(hasAudio),
+		sw: Boolean(hasSw),
+	}
 }
 
 /**
@@ -45,23 +74,30 @@ function page_apps(apps) {
  * 只有确认平台能按状态码区分时，才显式传 { include_404: true }。
  *
  * @param {string[]} [apps] 已构建且含 index.html 的应用名
- * @param {{ include_404?: boolean }} [options]
+ * @param {{
+ *   include_404?: boolean,
+ *   history_apps?: string[],
+ *   apps_dir?: string,
+ *   app_assets?: Record<string, { assets?: boolean, audio?: boolean, sw?: boolean }>
+ * }} [options]
  * @returns {Array<{source: string, destination: string}>}
  */
-export function build_rewrite_table(apps = [...HISTORY_APPS, ...BARE_APPS, ROOT_APP, NOT_FOUND_APP], options = {}) {
+export function build_rewrite_table(apps = [...new Set([...HISTORY_APPS, ...BARE_APPS, ROOT_APP, NOT_FOUND_APP])], options = {}) {
+	const historySet = new Set(options.history_apps || HISTORY_APPS)
 	const rules = [{ source: '/', destination: '/index.html' }]
 
 	for (const app of page_apps(apps)) {
-		if (HISTORY_APPS.includes(app)) {
-			// G1 防护：普通 rewrite 若先于静态资源匹配，下面的 /* 回退会把 assets/audio/sw.js
-			// 也改写成 HTML。先放身份重写，命中后仍指向原物理文件。
-			rules.push({ source: `/${app}/assets/*`, destination: `/${app}/assets/:splat` })
-			rules.push({ source: `/${app}/audio/*`, destination: `/${app}/audio/:splat` })
-			rules.push({ source: `/${app}/sw.js`, destination: `/${app}/sw.js` })
+		if (historySet.has(app)) {
+			// G1 防护：先放身份重写，命中真实静态资源后保持指向物理文件，不被 /* 吞掉。
+			// 只为实际存在对应资源（或显式声明）的应用生成 rules，避免无谓消耗配额。
+			const flags = inspect_app_assets(app, options)
+			if (flags.assets) rules.push({ source: `/${app}/assets/*`, destination: `/${app}/assets/:splat` })
+			if (flags.audio) rules.push({ source: `/${app}/audio/*`, destination: `/${app}/audio/:splat` })
+			if (flags.sw) rules.push({ source: `/${app}/sw.js`, destination: `/${app}/sw.js` })
 		}
 		rules.push({ source: `/${app}`, destination: `/${app}/index.html` })
 		rules.push({ source: `/${app}/`, destination: `/${app}/index.html` })
-		if (HISTORY_APPS.includes(app)) {
+		if (historySet.has(app)) {
 			rules.push({ source: `/${app}/*`, destination: `/${app}/index.html` })
 		}
 	}
@@ -102,10 +138,12 @@ export function build_header_table() {
 /**
  * 纯函数化静态决策，供单测与部署前自检使用。
  * @param {string} url 请求路径（可含 query）
- * @param {string[]} apps 已构建且含 index.html 的应用名
+ * @param {string[]} [apps] 已构建且含 index.html 的应用名
+ * @param {{ history_apps?: string[] }} [options]
  * @returns {{ type: 'api'|'file'|'redirect'|'fallback'|'not_found', path?: string }}
  */
-export function resolve_static_path(url, apps = [...HISTORY_APPS, ...BARE_APPS, ROOT_APP, NOT_FOUND_APP]) {
+export function resolve_static_path(url, apps = [...new Set([...HISTORY_APPS, ...BARE_APPS, ROOT_APP, NOT_FOUND_APP])], options = {}) {
+	const historyApps = options.history_apps || HISTORY_APPS
 	const pathname = String(url || '/').split('?')[0]
 	if (pathname === '/api' || pathname.startsWith('/api/')) return { type: 'api' }
 	if (pathname === '/' || pathname === '') return { type: 'file', path: '/index.html' }
@@ -125,6 +163,6 @@ export function resolve_static_path(url, apps = [...HISTORY_APPS, ...BARE_APPS, 
 
 	if (!apps.includes(app)) return { type: 'not_found' }
 	if (pathname === `/${app}` || pathname === `/${app}/`) return { type: 'file', path: `/${app}/index.html` }
-	if (HISTORY_APPS.includes(app)) return { type: 'fallback', path: `/${app}/index.html` }
+	if (historyApps.includes(app)) return { type: 'fallback', path: `/${app}/index.html` }
 	return { type: 'not_found' }
 }

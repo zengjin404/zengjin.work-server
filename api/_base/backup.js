@@ -1,9 +1,201 @@
 import crypto from 'node:crypto'
+import net from 'node:net'
 
 import { verifyAuth } from '#api_util/auth_middleware.js'
 import base from '#api_util/base.js'
 import { is_cron_authorized } from '#api_util/cron_auth.js'
 import { getPool } from '#api_util/db.js'
+
+const CLOUD_ENV_KEYS = [
+	'VERCEL',
+	'VERCEL_ENV',
+	'VERCEL_URL',
+	'VERCEL_REGION',
+	'VERCEL_BRANCH_URL',
+	'VERCEL_PROJECT_PRODUCTION_URL',
+	'NOW_REGION',
+	'SCF_RUNTIME',
+	'SCF_NAMESPACE',
+	'SCF_FUNCTIONNAME',
+	'TENCENTCLOUD_RUNENV',
+	'EDGEONE',
+	'EO_ENV',
+	'EDGEONE_ENV',
+	'EDGEONE_PAGES',
+	'EO_PAGES_HOST',
+	'EDGEONE_URL',
+	'EDGEONE_PAGES_URL',
+	'CF_PAGES',
+	'CF_PAGES_URL',
+	'AWS_LAMBDA_FUNCTION_NAME',
+	'AWS_EXECUTION_ENV',
+	'NETLIFY',
+	'RAILWAY_ENVIRONMENT',
+	'RENDER',
+	'FLY_APP_NAME',
+	'K_SERVICE',
+	'GOOGLE_CLOUD_PROJECT',
+	'ZEABUR',
+]
+
+const CLOUD_PROXY_HEADERS = [
+	'x-vercel-id',
+	'x-vercel-deployment-url',
+	'x-vercel-forwarded-for',
+	'x-vercel-proxied-for',
+	'x-vercel-ip-country',
+	'eo-log-uuid',
+	'eo-pages-host',
+	'eo-connecting-ip',
+	'x-eo-forwarded-for',
+	'x-scf-request-id',
+	'x-tencent-ua',
+	'cf-ray',
+	'cf-connecting-ip',
+	'cf-visitor',
+	'forwarded',
+	'x-forwarded-server',
+]
+
+function read_header(headers, name) {
+	if (!headers || typeof headers !== 'object') return undefined
+	const lower = name.toLowerCase()
+	for (const key of Object.keys(headers)) {
+		if (key.toLowerCase() === lower) return headers[key]
+	}
+	return undefined
+}
+
+function header_present(headers, name) {
+	const value = read_header(headers, name)
+	if (Array.isArray(value)) return value.some(item => String(item || '').trim() !== '')
+	return value !== undefined && value !== null && String(value).trim() !== ''
+}
+
+function normalize_ip(rawIp) {
+	if (typeof rawIp !== 'string') return ''
+	let ip = rawIp.trim().toLowerCase()
+	if (ip.startsWith('[') && ip.endsWith(']')) ip = ip.slice(1, -1)
+	if (ip.startsWith('::ffff:')) ip = ip.slice(7)
+	return ip
+}
+
+function parse_strict_host(rawHost) {
+	if (typeof rawHost !== 'string') return null
+	const host = rawHost.trim()
+	if (!host || /[\s,/\\?#@]/.test(host)) return null
+
+	// 兼容直接传入 ::1 / 0:0:0:0:0:0:0:1，以及带端口的标准 [::1]:port
+	if (host === '::1' || host === '0:0:0:0:0:0:0:1') {
+		return { host, hostname: host }
+	}
+
+	if (host.startsWith('[')) {
+		const m = host.match(/^\[([a-fA-F0-9:.]+)\](?::([1-9]\d{0,4}))?$/)
+		if (!m) return null
+		if (m[2] && Number(m[2]) > 65535) return null
+		const ip = m[1].toLowerCase()
+		if (!net.isIPv6(ip)) return null
+		return { host: host.toLowerCase(), hostname: ip }
+	}
+
+	const m = host.match(/^([a-zA-Z0-9.-]+)(?::([1-9]\d{0,4}))?$/)
+	if (!m) return null
+	if (m[2] && Number(m[2]) > 65535) return null
+	const hostname = m[1].toLowerCase()
+	if (hostname.startsWith('.') || hostname.endsWith('.') || hostname.includes('..')) return null
+	return { host: host.toLowerCase(), hostname }
+}
+
+function is_loopback_host(hostname) {
+	return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1' || hostname === '0:0:0:0:0:0:0:1' || hostname === '::ffff:127.0.0.1'
+}
+
+function is_lan_ipv4_host(hostname) {
+	if (!net.isIPv4(hostname)) return false
+	const parts = hostname.split('.').map(Number)
+	if (parts[0] === 10) return true
+	if (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) return true
+	if (parts[0] === 192 && parts[1] === 168) return true
+	return false
+}
+
+function is_allowed_dev_ip(ip, allowLan) {
+	if (!ip) return false
+	if (ip === '127.0.0.1' || ip === '::1' || ip === '0:0:0:0:0:0:0:1' || ip === '::ffff:127.0.0.1') return true
+	if (allowLan && is_lan_ipv4_host(ip)) return true
+	return false
+}
+
+function is_allowed_dev_host(hostname, allowLan) {
+	if (!hostname) return false
+	if (is_loopback_host(hostname)) return true
+	if (allowLan && is_lan_ipv4_host(hostname)) return true
+	return false
+}
+
+/**
+ * 仅允许显式处于本地 HTTP 直连开发环境时免鉴权手动调试备份（fail-closed）：
+ * 1. 默认仅允许 localhost、127.0.0.1、::1 等回环地址，局域网设备默认拒绝；
+ * 2. 只有显式设置 BACKUP_ALLOW_LAN_DEV=1（默认关闭）时才允许 RFC1918 私网局域网调试；
+ * 3. 缺少 NODE_ENV=development、APP_ENV 异常、存在云平台环境变量/代理头、HTTPS 或 Host 异常一律拒绝。
+ */
+export function is_local_dev_backup_allowed(req, env = process.env) {
+	if (env?.NODE_ENV !== 'development') return false
+	const appEnv = String(env?.APP_ENV || '')
+		.trim()
+		.toLowerCase()
+	if (appEnv === 'production' || (appEnv && appEnv !== 'development')) return false
+	if (CLOUD_ENV_KEYS.some(key => String(env?.[key] || '').trim() !== '')) return false
+	if (!req || typeof req !== 'object') return false
+
+	const headers = req.headers || {}
+	if (CLOUD_PROXY_HEADERS.some(header => header_present(headers, header))) return false
+
+	const rawProto = read_header(headers, 'x-forwarded-proto')
+	if (Array.isArray(rawProto)) return false
+	const forwardedProto = String(rawProto || '')
+		.trim()
+		.toLowerCase()
+	if (forwardedProto && forwardedProto !== 'http') return false
+	if (
+		String(read_header(headers, 'x-forwarded-ssl') || '')
+			.trim()
+			.toLowerCase() === 'on'
+	) {
+		return false
+	}
+	if (req?.socket?.encrypted || req?.connection?.encrypted) return false
+
+	const allowLan = env?.BACKUP_ALLOW_LAN_DEV === '1'
+
+	// 若存在真实底层对端 IP（防止局域网/公网客户端连接 0.0.0.0 时伪造 Host: localhost），一并校验
+	const rawRemote = req?.socket?.remoteAddress || req?.connection?.remoteAddress
+	if (rawRemote) {
+		if (!is_allowed_dev_ip(normalize_ip(String(rawRemote)), allowLan)) return false
+	}
+
+	const realIp = read_header(headers, 'x-real-ip')
+	if (realIp !== undefined && String(realIp).trim() !== '') {
+		if (Array.isArray(realIp) || !is_allowed_dev_ip(normalize_ip(realIp), allowLan)) return false
+	}
+
+	const forwardedFor = read_header(headers, 'x-forwarded-for')
+	if (forwardedFor !== undefined && String(forwardedFor).trim() !== '') {
+		if (Array.isArray(forwardedFor)) return false
+		const hops = forwardedFor.split(',').map(item => normalize_ip(item))
+		if (hops.length === 0 || hops.some(ip => !is_allowed_dev_ip(ip, allowLan))) return false
+	}
+
+	if (header_present(headers, 'x-forwarded-host')) {
+		const parsedForwarded = parse_strict_host(read_header(headers, 'x-forwarded-host'))
+		if (!parsedForwarded || !is_allowed_dev_host(parsedForwarded.hostname, allowLan)) return false
+	}
+
+	const parsedHost = parse_strict_host(read_header(headers, 'host'))
+	if (!parsedHost) return false
+	return is_allowed_dev_host(parsedHost.hostname, allowLan)
+}
 
 // 本接口专用：执行主备双写更新日志
 async function upsert_backup_log_async(pool, logObj) {
@@ -1494,31 +1686,33 @@ export default async (req, resp) => {
 		extra: {},
 	}
 
-	// 1. 鉴权：平台中立双通道
+	// 1. 鉴权：仅严格识别本地开发环境时免检调试，其余环境一律走平台中立双通道鉴权
 	//    - 定时任务：Bearer（Vercel Cron）/ x-cron-secret / query / body（EdgeOne schedules）
-	//    - 人工触发：已登录用户的 Bearer Access Token
-	// CRON_SECRET 未配置时 fail-closed，绝不接受 "Bearer undefined"。
-	const cronAuth = is_cron_authorized(req)
-	if (!cronAuth.ok) {
-		const user = await verifyAuth(req)
-		if (!user?.userId) {
-			try {
-				await writeGateMark(logObj, GATE_AUTH_ID, '鉴权失败：缺少或错误的 CRON_SECRET / 登录令牌')
-			} catch (gateError) {
-				console.error('[备份引擎 V2] 写鉴权失败标记失败:', gateError.message)
+	//    - 人工触发：已登录管理员的 Bearer Access Token
+	// 缺少环境变量或 CRON_SECRET 未配置时均 fail-closed，绝不放行。
+	if (!is_local_dev_backup_allowed(req)) {
+		const cronAuth = is_cron_authorized(req)
+		if (!cronAuth.ok) {
+			const user = await verifyAuth(req)
+			if (!user?.userId) {
+				try {
+					await writeGateMark(logObj, GATE_AUTH_ID, '鉴权失败：缺少或错误的 CRON_SECRET / 登录令牌')
+				} catch (gateError) {
+					console.error('[备份引擎 V2] 写鉴权失败标记失败:', gateError.message)
+				}
+				resp.status(401).json({ code: -1, msg: '未授权：缺少有效 CRON_SECRET 或登录令牌' })
+				return
 			}
-			resp.status(401).json({ code: -1, msg: '未授权：缺少有效 CRON_SECRET 或登录令牌' })
-			return
-		}
-		// 备份是破坏性运维操作，只允许内置管理员人工触发；普通登录用户不得触发
-		if (user.username !== 'admin') {
-			try {
-				await writeGateMark(logObj, GATE_AUTH_ID, '鉴权失败：非管理员尝试触发备份')
-			} catch (gateError) {
-				console.error('[备份引擎 V2] 写鉴权失败标记失败:', gateError.message)
+			// 备份是破坏性运维操作，只允许内置管理员人工触发；普通登录用户不得触发
+			if (user.username !== 'admin') {
+				try {
+					await writeGateMark(logObj, GATE_AUTH_ID, '鉴权失败：非管理员尝试触发备份')
+				} catch (gateError) {
+					console.error('[备份引擎 V2] 写鉴权失败标记失败:', gateError.message)
+				}
+				resp.status(403).json({ code: -1, msg: '无操作权限：仅系统管理员可触发备份' })
+				return
 			}
-			resp.status(403).json({ code: -1, msg: '无操作权限：仅系统管理员可触发备份' })
-			return
 		}
 	}
 

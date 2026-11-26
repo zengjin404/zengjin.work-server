@@ -10,7 +10,7 @@ import { readFile, stat } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
-import { HISTORY_APPS, NOT_FOUND_APP } from '../api_util/static_routes.js'
+import { HISTORY_APPS, NOT_FOUND_APP, inspect_app_assets } from '../api_util/static_routes.js'
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const DIST = path.join(REPO_ROOT, 'edgeone-dist')
@@ -117,12 +117,28 @@ async function main() {
 	const sources = new Set(config.rewrites.map(rule => rule.source))
 	for (const app of HISTORY_APPS) {
 		assert(sources.has(`/${app}/*`), `缺少 History 回退规则: /${app}/*`)
-		assert(sources.has(`/${app}/assets/*`), `缺少静态资源身份规则: /${app}/assets/*`)
-		assert(sources.has(`/${app}/audio/*`), `缺少静态资源身份规则: /${app}/audio/*`)
-		assert(sources.has(`/${app}/sw.js`), `缺少静态资源身份规则: /${app}/sw.js`)
-		const assetIndex = config.rewrites.findIndex(rule => rule.source === `/${app}/assets/*`)
 		const pageIndex = config.rewrites.findIndex(rule => rule.source === `/${app}/*`)
-		assert(assetIndex !== -1 && assetIndex < pageIndex, `资源身份规则必须位于页面回退之前: ${app}`)
+		const flags = inspect_app_assets(app, { apps_dir: DIST })
+
+		if (flags.assets) {
+			assert(sources.has(`/${app}/assets/*`), `缺少静态资源身份规则: /${app}/assets/*`)
+			const assetIndex = config.rewrites.findIndex(rule => rule.source === `/${app}/assets/*`)
+			assert(assetIndex !== -1 && assetIndex < pageIndex, `资源身份规则必须位于页面回退之前: ${app}`)
+		}
+		if (flags.audio) {
+			assert(sources.has(`/${app}/audio/*`), `缺少音频资源身份规则: /${app}/audio/*`)
+			const audioIndex = config.rewrites.findIndex(rule => rule.source === `/${app}/audio/*`)
+			assert(audioIndex !== -1 && audioIndex < pageIndex, `音频身份规则必须位于页面回退之前: ${app}`)
+		} else {
+			assert(!sources.has(`/${app}/audio/*`), `不存在 audio/ 却生成了多余规则: /${app}/audio/*`)
+		}
+		if (flags.sw) {
+			assert(sources.has(`/${app}/sw.js`), `缺少 Service Worker 规则: /${app}/sw.js`)
+			const swIndex = config.rewrites.findIndex(rule => rule.source === `/${app}/sw.js`)
+			assert(swIndex !== -1 && swIndex < pageIndex, `SW 规则必须位于页面回退之前: ${app}`)
+		} else {
+			assert(!sources.has(`/${app}/sw.js`), `不存在 sw.js 却生成了多余规则: /${app}/sw.js`)
+		}
 	}
 	for (const rule of config.rewrites) {
 		assert(String(rule.source).startsWith('/'), `rewrite.source 必须以 / 开头: ${rule.source}`)
