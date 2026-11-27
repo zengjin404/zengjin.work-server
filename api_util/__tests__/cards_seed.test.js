@@ -46,15 +46,17 @@ describe('cards_seed — 初始内容', () => {
 		expect(seed_items.every(item => item.id.length <= 20)).toBe(true)
 	})
 
-	it('包含 78 条动物 Emoji 初始视觉素材与 88 条录制语音资产', () => {
-		expect(seed_animal_assets).toHaveLength(166)
+	it('包含 78 条动物 Emoji 初始视觉素材与 132 条录制语音资产', () => {
+		expect(seed_animal_assets).toHaveLength(210)
 		const assetIds = new Set(seed_animal_assets.map(a => a.id))
-		expect(assetIds.size).toBe(166)
+		expect(assetIds.size).toBe(210)
 		const emojiAssets = seed_animal_assets.filter(a => a.asset_type === 'emoji')
 		const narrationAssets = seed_animal_assets.filter(a => a.asset_type === 'narration')
 		expect(emojiAssets).toHaveLength(78)
-		expect(narrationAssets).toHaveLength(88)
-		expect(narrationAssets.filter(a => a.metadata?.lang === 'zh')).toHaveLength(44)
+		expect(narrationAssets).toHaveLength(132)
+		expect(narrationAssets.filter(a => a.metadata?.lang === 'zh')).toHaveLength(88)
+		expect(narrationAssets.filter(a => a.metadata?.lang === 'zh' && a.metadata?.role === 'detail')).toHaveLength(44)
+		expect(narrationAssets.filter(a => a.metadata?.lang === 'zh' && a.metadata?.role === 'name')).toHaveLength(44)
 		expect(narrationAssets.filter(a => a.metadata?.lang === 'en')).toHaveLength(44)
 	})
 

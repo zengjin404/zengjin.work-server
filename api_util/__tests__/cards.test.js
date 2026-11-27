@@ -143,7 +143,7 @@ describe('cards 公开内容接口', () => {
 		expect(seedUpdate).toBeTruthy()
 	})
 
-	it('seed_version 为 2 时执行第三阶段迁移，幂等补齐 88 条语音资产', async () => {
+	it('seed_version 为 2 时执行第三阶段迁移，幂等补齐 132 条语音资产', async () => {
 		const cardsModule = await load_cards_module()
 		rules.push(text => {
 			if (text.includes('SELECT seed_version')) return { rows: [{ seed_version: '2' }] }
@@ -153,7 +153,7 @@ describe('cards 公开内容接口', () => {
 		await cardsModule.ensure_dbInitialized_async()
 
 		const assetInserts = mockQuery.mock.calls.filter(call => sqlOf(call).includes('INSERT INTO cards_asset'))
-		expect(assetInserts.length).toBe(88) // 仅插入 88 条语音资产，不重复插入 78 条 emoji 资产
+		expect(assetInserts.length).toBe(132) // 仅插入 132 条语音资产，不重复插入 78 条 emoji 资产
 		expect(sqlOf(assetInserts[0])).toContain('ON CONFLICT DO NOTHING')
 		const seedUpdate = mockQuery.mock.calls.find(call => sqlOf(call).includes('SET seed_version = 3'))
 		expect(seedUpdate).toBeTruthy()
