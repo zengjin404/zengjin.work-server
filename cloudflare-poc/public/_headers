@@ -1,0 +1,10 @@
+/*.tflite
+  Content-Type: application/octet-stream
+  X-CF-Header-Test: tflite
+
+/*.bcmap
+  Content-Type: application/octet-stream
+
+/cards/sw.js
+  Service-Worker-Allowed: /cards
+  Cache-Control: no-cache

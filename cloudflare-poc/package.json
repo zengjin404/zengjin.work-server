@@ -1,0 +1,12 @@
+{
+	"name": "zengjin-cf-poc",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"dev": "npx wrangler@4.168.0 dev --local",
+		"dev:full": "npx wrangler@4.168.0 dev --local --config wrangler.full.jsonc",
+		"deploy": "npx wrangler@4.168.0 deploy",
+		"deploy:full": "npx wrangler@4.168.0 deploy --config wrangler.full.jsonc",
+		"tail": "npx wrangler@4.168.0 tail"
+	}
+}
