@@ -54,6 +54,13 @@ describe('edgeone.json 配置契约', () => {
 		expect(config.rewrites).toEqual(build_rewrite_table())
 	})
 
+	it('www 自定义域名 301 重定向到主站，且置于 redirects 首位', async () => {
+		const config = JSON.parse(await readFile(CONFIG_PATH, 'utf8'))
+		expect(config.redirects[0]).toEqual({ source: '$wwwhost', destination: '$host', statusCode: 301 })
+		// 防止误配成反向规则造成 www ↔ 主站循环
+		expect(config.redirects.some(rule => rule.source === '$host' && rule.destination === '$wwwhost')).toBe(false)
+	})
+
 	it('默认不使用 /* 兜底，避免把不存在的 .js 返回成 HTML', async () => {
 		const config = JSON.parse(await readFile(CONFIG_PATH, 'utf8'))
 		expect(config.rewrites.some(rule => rule.source === '/*')).toBe(false)

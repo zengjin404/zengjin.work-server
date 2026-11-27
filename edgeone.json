@@ -10,6 +10,11 @@
 	},
 	"redirects": [
 		{
+			"source": "$wwwhost",
+			"destination": "$host",
+			"statusCode": 301
+		},
+		{
 			"source": "/index",
 			"destination": "/",
 			"statusCode": 301
