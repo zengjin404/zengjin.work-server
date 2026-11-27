@@ -78,7 +78,7 @@ function check_rate_limit(scope, key, max) {
 }
 
 /** 建表 / 索引 / 种子（幂等，模块级只执行一次） */
-async function ensure_dbInitialized_async() {
+export async function ensure_dbInitialized_async() {
 	if (dbInitialized) return
 
 	await db.query(`
@@ -1173,8 +1173,6 @@ export default async (req, resp) => {
 	const { method, action, table, query, body } = base.getReqInfo()
 
 	try {
-		await ensure_dbInitialized_async()
-
 		const handler = routes[`${method}:${table}:${action}`]
 		if (!handler) return base.respFailure({ msg: `图卡乐园模块未知操作: ${method} ${table || ''}/${action || ''}` })
 		return await handler({ req, resp, query, body })

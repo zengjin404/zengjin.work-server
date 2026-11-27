@@ -10,9 +10,9 @@ import { verifyAccessToken } from '#api_util/jwt.js'
 let dbInitialized = false
 
 /**
- * 确保数据库表和预设数据已初始化 (异步，首个请求触发)
+ * 确保数据库表和预设数据已初始化（部署期迁移调用，不再由请求触发）
  */
-async function ensure_dbInitialized_async() {
+export async function ensure_dbInitialized_async() {
 	if (dbInitialized) return
 
 	// 创建模型配置表 (url/key/domain/provider 已抽离至 base_ai_provider 服务商表, 模型仅挂 providerId 外键)
@@ -64,7 +64,7 @@ async function ensure_dbInitialized_async() {
 
 	// ---- 存量规范化迁移: 把模型行内联的 url/key/domain/provider 抽离进服务商表并回链 providerId (幂等可重放) ----
 	// 旧内联列会在下方收尾时被 DROP, 已清理的库再 SELECT 它们会直接报 column "domain" does not exist,
-	// 而 ensure 每次冷启动都要重跑, 故先探测旧列是否仍在, 再决定走完整迁移还是只补收尾
+	// 而 ensure 在结构未收敛前可能重放, 故先探测旧列是否仍在, 再决定走完整迁移还是只补收尾
 	const legacyRes = await db.query(
 		`SELECT COUNT(*) FROM information_schema.columns
 		 WHERE table_schema = current_schema() AND table_name = 'base_ai'
@@ -98,7 +98,7 @@ async function ensure_dbInitialized_async() {
 		}
 	}
 
-	// 守卫清理: 仅当全部模型行均已回链才收紧 NOT NULL 并删除旧列, 否则跳过等下轮冷启动幂等自愈 (绝不静默破坏数据)
+	// 守卫清理: 仅当全部模型行均已回链才收紧 NOT NULL 并删除旧列, 否则跳过等下次迁移幂等自愈 (绝不静默破坏数据)
 	// legacyCount 为 1~3 说明上轮清理中断, 同样在这里补齐, 收敛到 0 后彻底跳过整段
 	if (legacyCount > 0) {
 		const orphanRes = await db.query('SELECT COUNT(*) FROM base_ai WHERE "providerId" IS NULL')
@@ -454,7 +454,6 @@ const actions = {
  * 服务商显示名/协议经 JOIN base_ai_provider 取出, 别名 domain/provider 保持返回结构不变 (前台零改动)
  */
 actions.get.models = async () => {
-	await ensure_dbInitialized_async()
 	try {
 		// 排序与后台列表一致 (sort ASC, createTime DESC 次级), 保证前台下拉顺序严格跟随后台配置
 		const result = await db.query(
@@ -475,7 +474,6 @@ actions.get.models = async () => {
  * [管理端] 获取模型配置列表 (服务商显示名/协议经 JOIN 取出, 不返回服务商密钥)
  */
 actions.get.admin_models = requireAuth(async ({ query }) => {
-	await ensure_dbInitialized_async()
 	try {
 		const current = parseInt(query?.current || query?.pageNum || query?.page) || 1
 		const pageSize = parseInt(query?.pageSize) || 20
@@ -534,7 +532,6 @@ actions.get.admin_models = requireAuth(async ({ query }) => {
  * [管理端] 新增或修改模型 (url/key/domain/provider 归属服务商, 模型仅携带 providerId 外键)
  */
 actions.post.admin_models_save = requireAuth(async ({ body }) => {
-	await ensure_dbInitialized_async()
 	const { id, name, providerId, model, desc, status = 1, isReasoning = 0, search = 1, sort = 0 } = body
 	// 响应速度: 1=快 2=中 3=慢, 非法值归一为默认"中"
 	const speed = [1, 2, 3].includes(parseInt(body.speed)) ? parseInt(body.speed) : 2
@@ -579,7 +576,6 @@ actions.post.admin_models_save = requireAuth(async ({ body }) => {
  * [管理端] 删除模型
  */
 actions.post.admin_models_delete = requireAuth(async ({ body }) => {
-	await ensure_dbInitialized_async()
 	const { id } = body
 	if (!id) return base.respFailure({ msg: 'ID不能为空' })
 	try {
@@ -594,7 +590,6 @@ actions.post.admin_models_delete = requireAuth(async ({ body }) => {
  * [管理端] 获取服务商接入配置列表 (分页, 含关联模型数, 密钥仅返回掩码)
  */
 actions.get.admin_providers = requireAuth(async ({ query }) => {
-	await ensure_dbInitialized_async()
 	try {
 		const current = parseInt(query?.current || query?.pageNum || query?.page) || 1
 		const pageSize = parseInt(query?.pageSize) || 20
@@ -648,7 +643,6 @@ actions.get.admin_providers = requireAuth(async ({ query }) => {
  * [管理端] 获取启用中的服务商 (下拉全量, 不返回密钥)
  */
 actions.get.admin_providers_select = requireAuth(async () => {
-	await ensure_dbInitialized_async()
 	try {
 		const result = await db.query('SELECT id, name, domain, provider FROM base_ai_provider WHERE status = 1 ORDER BY sort ASC, "createTime" DESC')
 		return base.respSuccess({
@@ -663,7 +657,6 @@ actions.get.admin_providers_select = requireAuth(async () => {
  * [管理端] 新增或修改服务商 (key 支持留空保留原值; 允许同 url+key 重复建多条以支持多套接入)
  */
 actions.post.admin_providers_save = requireAuth(async ({ body }) => {
-	await ensure_dbInitialized_async()
 	const { id, name, domain, provider, url, key, desc, status = 1, sort = 0 } = body
 	const isUpdate = !!id
 	// 新增时 key 必填; 更新时 key 可留空, 为空则保留旧密钥
@@ -711,7 +704,6 @@ actions.post.admin_providers_save = requireAuth(async ({ body }) => {
  * [管理端] 删除服务商 (仍被模型引用时拒绝, 保护模型数据不悬空)
  */
 actions.post.admin_providers_delete = requireAuth(async ({ body }) => {
-	await ensure_dbInitialized_async()
 	const { id } = body
 	if (!id) return base.respFailure({ msg: 'ID不能为空' })
 	try {
@@ -731,7 +723,6 @@ actions.post.admin_providers_delete = requireAuth(async ({ body }) => {
  * [已登录用户] 获取用户的对话会话列表
  */
 actions.get.sessions = requireAuth(async ({ req }) => {
-	await ensure_dbInitialized_async()
 	const { userId } = req.user
 	try {
 		// 附带消息条数 msgCount, 便于前端过滤历史遗留的空会话 (延迟创建后不再产生新空会话)
@@ -756,7 +747,6 @@ actions.get.sessions = requireAuth(async ({ req }) => {
  * [已登录用户] 创建或重命名会话
  */
 actions.post.session_save = requireAuth(async ({ req, body }) => {
-	await ensure_dbInitialized_async()
 	const { userId } = req.user
 	const { id, title, modelId } = body
 	const titleSource = body.titleSource === 'manual' ? 'manual' : 'auto'
@@ -801,7 +791,6 @@ actions.post.session_save = requireAuth(async ({ req, body }) => {
  * [已登录用户] 批量同步本地会话至云端 (游客转登录的同步接口)
  */
 actions.post.sessions_sync = requireAuth(async ({ req, body }) => {
-	await ensure_dbInitialized_async()
 	const { userId } = req.user
 	const { sessions } = body // 格式: [{ id, title, modelId, messages: [...] }]
 	if (!Array.isArray(sessions)) {
@@ -845,7 +834,6 @@ actions.post.sessions_sync = requireAuth(async ({ req, body }) => {
  * [已登录用户] 删除会话
  */
 actions.post.session_delete = requireAuth(async ({ req, body }) => {
-	await ensure_dbInitialized_async()
 	const { userId } = req.user
 	const { id } = body
 	if (!id) return base.respFailure({ msg: '会话ID不能为空' })
@@ -862,7 +850,6 @@ actions.post.session_delete = requireAuth(async ({ req, body }) => {
  * [已登录用户] 获取单会话的历史消息记录
  */
 actions.get.messages = requireAuth(async ({ req, query }) => {
-	await ensure_dbInitialized_async()
 	const { userId } = req.user
 	const { sessionId } = query
 	if (!sessionId) return base.respFailure({ msg: '缺少sessionId' })
@@ -898,7 +885,6 @@ actions.get.messages = requireAuth(async ({ req, query }) => {
  * 采用原生代理直通转发 SSE，在完成后异步将内容写入数据库 (如果属于登录用户)
  */
 actions.post.chat = async ({ req, resp, body }) => {
-	await ensure_dbInitialized_async()
 	const { modelId, messages, sessionId, searchMode: rawSearchMode } = body
 
 	if (!modelId || !Array.isArray(messages)) {
@@ -1126,7 +1112,6 @@ actions.post.title = async ({ body }) => {
 	if (!modelId) return base.respFailure({ msg: '缺少模型ID' })
 
 	try {
-		await ensure_dbInitialized_async()
 		// 模型 + 服务商接入配置 JOIN (url/key/provider 归属服务商表; 服务商被禁用时模型同样不可用)
 		const modelRes = await db.query(
 			`SELECT m.id, m.name, m."providerId", m.model, m."desc", m.search, m.status, m.speed, m.sort, m."isReasoning",

@@ -12,7 +12,6 @@ import {
 } from '#api_util/notification_schema.js'
 import {
 	count_unread_notifications_async,
-	ensure_notification_db_async,
 	get_notification_async,
 	get_notification_setting_async,
 	mark_all_notifications_read_async,
@@ -161,8 +160,6 @@ export default async (req, resp) => {
 	const { method, action, table, query, body } = base.getReqInfo()
 
 	try {
-		await ensure_notification_db_async()
-
 		const handler = routes[`${method}:${table}:${action}`]
 		if (!handler) return base.respFailure({ msg: `消息通知模块未知操作: ${method} ${table || ''}/${action || ''}` })
 		return await handler({ req, resp, query, body })

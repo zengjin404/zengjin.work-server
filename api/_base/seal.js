@@ -35,7 +35,7 @@ let dbInitialized = false
  * 不用 timestamptz 的原因见 _jndv.js 的定案注释（timestamptz 不存显示用的字面值，
  * 显示成什么取决于读它的客户端，Supabase 会话是 UTC，直接查表会少 8 小时）。
  */
-async function ensure_dbInitialized_async() {
+export async function ensure_dbInitialized_async() {
 	if (dbInitialized) return
 
 	await db.query(`
@@ -150,7 +150,6 @@ export default async (req, resp) => {
 
 	try {
 		// 建表对所有入口统一前置, 幂等缓存保证只执行一次
-		await ensure_dbInitialized_async()
 
 		if (actions[method]?.[action]) {
 			const handler = actions[method][action]

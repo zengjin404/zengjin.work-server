@@ -15,7 +15,7 @@ let dbInitialized = false
 /**
  * 建表与索引（幂等执行）
  */
-async function ensure_dbInitialized_async() {
+export async function ensure_dbInitialized_async() {
 	if (dbInitialized) return
 
 	await db.query(`
@@ -45,7 +45,6 @@ const actions = {
  * GET /api/fa/config
  */
 actions.get.config = requireAuth(async () => {
-	await ensure_dbInitialized_async()
 	const userId = base.req.user.userId
 
 	const { rows } = await db.query(
@@ -83,7 +82,6 @@ actions.get.config = requireAuth(async () => {
  * body: { favorites: string[], recents: string[], config?: object, syncMode?: 'merge' | 'overwrite' }
  */
 actions.post.config = requireAuth(async () => {
-	await ensure_dbInitialized_async()
 	const userId = base.req.user.userId
 	const body = base.req.body || {}
 

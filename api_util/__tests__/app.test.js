@@ -60,8 +60,12 @@ beforeEach(() => {
 	vi.resetModules()
 })
 
+async function load_app_module() {
+	return await import('../../api/_base/app.js')
+}
+
 async function load_app() {
-	return (await import('../../api/_base/app.js')).default
+	return (await load_app_module()).default
 }
 
 async function call_api(handler, url, method = 'GET', { headers = {}, body = {}, query = {} } = {}) {
@@ -209,16 +213,16 @@ describe('app 元数据审查', () => {
 	})
 })
 
-describe('app 分类迁移', () => {
+describe('app 分类迁移（部署期执行）', () => {
 	it('迁移标记存在时不再扫描并覆盖应用分类', async () => {
-		const handler = await load_app()
-		await call_api(handler, '/api/base/app/home')
+		const appModule = await load_app_module()
+		await appModule.ensure_dbInitialized_async()
 		const migrationScan = mockQuery.mock.calls.map(sqlOf).find(text => text.includes('SELECT id, name, category, visibility, show FROM base_app'))
 		expect(migrationScan).toBeFalsy()
 	})
 
 	it('迁移标记不存在时按归属清单更新并写入标记', async () => {
-		const handler = await load_app()
+		const appModule = await load_app_module()
 		rules.push((text, binds) => {
 			if (text.includes('SELECT 1 FROM base_app_migration')) return { rows: [] }
 			if (text.includes('SELECT id, name, category, visibility, show FROM base_app')) {
@@ -227,7 +231,7 @@ describe('app 分类迁移', () => {
 			return undefined
 		})
 
-		await call_api(handler, '/api/base/app/home')
+		await appModule.ensure_dbInitialized_async()
 
 		const updateCall = mockQuery.mock.calls.find(call => sqlOf(call).includes('UPDATE base_app SET category = $1'))
 		expect(updateCall).toBeTruthy()

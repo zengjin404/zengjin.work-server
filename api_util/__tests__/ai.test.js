@@ -21,9 +21,14 @@ beforeEach(() => {
 	vi.resetModules() // 重置 ai 模块级 dbInitialized，使 ensure 每次用例都真实执行
 })
 
+/** 重新加载一份全新的 ai 模块（迁移已移出请求路径，用例需显式调用 ensure） */
+async function load_ai_module() {
+	return await import('../../api/_base/ai.js')
+}
+
 /** 重新加载一份全新的 ai 模块，返回其 default handler */
 async function load_ai() {
-	return (await import('../../api/_base/ai.js')).default
+	return (await load_ai_module()).default
 }
 
 /**
@@ -85,12 +90,13 @@ async function call_api(handler, url, method = 'GET', body = {}, query = {}) {
 const sqlLog = () => mockQuery.mock.calls.map(c => String(c[0]).replace(/\s+/g, ' ').trim().toLowerCase())
 const has_sql = pattern => sqlLog().some(s => s.includes(pattern))
 
-describe('ai.get.models — 冷启动迁移探测', () => {
+describe('ai ensure — 存量结构迁移（部署期执行）', () => {
 	it('旧列已清理的库（legacyCount=0）不得再 SELECT 旧列，接口正常返回', async () => {
-		const aiHandler = await load_ai()
+		const aiModule = await load_ai_module()
 		mock_db({ legacyCount: 0 })
 
-		const res = await call_api(aiHandler, '/api/base/ai/models')
+		await aiModule.ensure_dbInitialized_async()
+		const res = await call_api(aiModule.default, '/api/base/ai/models')
 
 		expect(res.json.code).toBe(0)
 		expect(res.json.msg).not.toContain('服务器处理崩溃')
@@ -101,13 +107,13 @@ describe('ai.get.models — 冷启动迁移探测', () => {
 	})
 
 	it('未迁移的存量库（legacyCount=4）仍执行完整回填：建服务商 + 回链 providerId', async () => {
-		const aiHandler = await load_ai()
+		const aiModule = await load_ai_module()
 		mock_db({
 			legacyCount: 4,
 			staleRows: [{ id: 'm1', domain: 'Deepseek', provider: 'openai', url: 'https://api.deepseek.com/chat/completions', key: 'sk-x' }],
 		})
 
-		await call_api(aiHandler, '/api/base/ai/models')
+		await aiModule.ensure_dbInitialized_async()
 
 		expect(has_sql('select id, domain, provider, url, key from base_ai')).toBe(true)
 		expect(has_sql('insert into base_ai_provider')).toBe(true)
@@ -118,34 +124,34 @@ describe('ai.get.models — 冷启动迁移探测', () => {
 	})
 
 	it('存量库已有同名服务商时复用其 id，不重复建服务商', async () => {
-		const aiHandler = await load_ai()
+		const aiModule = await load_ai_module()
 		mock_db({
 			legacyCount: 4,
 			providerHit: true,
 			staleRows: [{ id: 'm1', domain: 'X', provider: 'openai', url: 'https://x.com/v1', key: 'k1' }],
 		})
 
-		await call_api(aiHandler, '/api/base/ai/models')
+		await aiModule.ensure_dbInitialized_async()
 
 		expect(has_sql('insert into base_ai_provider')).toBe(false)
 		expect(has_sql('update base_ai set "providerid"')).toBe(true)
 	})
 
 	it('清理中断态（旧列只删了一部分）只补收尾，不回头 SELECT 旧列', async () => {
-		const aiHandler = await load_ai()
+		const aiModule = await load_ai_module()
 		mock_db({ legacyCount: 2 })
 
-		await call_api(aiHandler, '/api/base/ai/models')
+		await aiModule.ensure_dbInitialized_async()
 
 		expect(has_sql('select id, domain, provider, url, key from base_ai')).toBe(false)
 		expect(has_sql('drop column if exists domain')).toBe(true)
 	})
 
-	it('仍有未回链行时保留旧列，等下轮冷启动自愈（不静默破坏数据）', async () => {
-		const aiHandler = await load_ai()
+	it('仍有未回链行时保留旧列，等下次迁移自愈（不静默破坏数据）', async () => {
+		const aiModule = await load_ai_module()
 		mock_db({ legacyCount: 4, staleRows: [], orphanCount: '3' })
 
-		await call_api(aiHandler, '/api/base/ai/models')
+		await aiModule.ensure_dbInitialized_async()
 
 		expect(has_sql('drop column')).toBe(false)
 		expect(has_sql('set not null')).toBe(false)

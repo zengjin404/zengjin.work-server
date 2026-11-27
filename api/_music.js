@@ -10,7 +10,7 @@ let tableInited = false
 /**
  * 自动初始化表结构（幂等）
  */
-async function init_table_async() {
+export async function init_table_async() {
 	if (tableInited) return
 	try {
 		await db.query(`
@@ -35,6 +35,8 @@ async function init_table_async() {
 		tableInited = true
 	} catch (error) {
 		console.error('初始化 music 表失败:', error)
+		// 迁移执行器依赖异常判断失败，不能吞掉错误后误记版本
+		throw error
 	}
 }
 
@@ -42,7 +44,6 @@ const actions = {
 	get: {
 		// 歌曲列表 (前台/后台通用)
 		select: async ({ query } = {}) => {
-			await init_table_async()
 			query = query || base.getReqInfo().query || {}
 			const page = parseInt(query.page || query.current) || 1
 			const pageSize = parseInt(query.pageSize || query.size) || 100
@@ -102,7 +103,6 @@ const actions = {
 
 		// 歌曲详情
 		detail: async ({ query } = {}) => {
-			await init_table_async()
 			query = query || base.getReqInfo().query || {}
 			if (!query.id) return base.respFailure({ msg: 'id 参数缺失' })
 
@@ -121,7 +121,6 @@ const actions = {
 	post: {
 		// 新增歌曲
 		insert: requireAuth(async ({ body } = {}) => {
-			await init_table_async()
 			body = body || base.getReqInfo().body || {}
 			const notMatch = base.checkValids(body, valids)
 			if (notMatch) {
@@ -156,7 +155,6 @@ const actions = {
 
 		// 更新歌曲
 		update: requireAuth(async ({ body } = {}) => {
-			await init_table_async()
 			body = body || base.getReqInfo().body || {}
 			if (!body?.id) return base.respFailure({ msg: 'id 参数缺失' })
 
@@ -202,7 +200,6 @@ const actions = {
 
 		// 软删除歌曲
 		delete: requireAuth(async ({ body } = {}) => {
-			await init_table_async()
 			body = body || base.getReqInfo().body || {}
 			if (!body?.id) return base.respFailure({ msg: 'id 参数缺失' })
 			const ids = String(body.id).split(',')
@@ -218,7 +215,6 @@ const actions = {
 
 		// 切换收藏状态
 		toggleFavorite: async ({ body } = {}) => {
-			await init_table_async()
 			body = body || base.getReqInfo().body || {}
 			if (!body?.id) return base.respFailure({ msg: 'id 参数缺失' })
 
@@ -238,7 +234,6 @@ const actions = {
 
 		// 切换上下架状态 (后台管理用)
 		toggleStatus: requireAuth(async ({ body } = {}) => {
-			await init_table_async()
 			body = body || base.getReqInfo().body || {}
 			if (!body?.id) return base.respFailure({ msg: 'id 参数缺失' })
 

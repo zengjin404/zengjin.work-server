@@ -15,8 +15,9 @@ let hasCheckedDb = false
 /**
  * 自动检测并初始化数据库表
  */
-async function ensure_tables_exist() {
+export async function ensure_tables_exist() {
 	if (hasCheckedDb) return
+	let client
 	try {
 		const checkSubSql = `SELECT EXISTS (SELECT FROM pg_tables WHERE schemaname = 'public' AND tablename = 'sub');`
 		const subCheckRes = await db.query(checkSubSql)
@@ -25,8 +26,9 @@ async function ensure_tables_exist() {
 		if (!subExists) {
 			console.log('检测到订阅周期管家数据表不存在，正在初始化数据库...')
 
-			// 使用事务串行创建表和索引
-			await db.query('BEGIN')
+			// 事务必须固定在同一连接上；连接池的 db.query 每次可能取到不同连接
+			client = await db.connect()
+			await client.query('BEGIN')
 
 			const createSubTableSql = `
 				CREATE TABLE IF NOT EXISTS sub (
@@ -50,7 +52,7 @@ async function ensure_tables_exist() {
 					"deleteTime"    TIMESTAMPTZ
 				);
 			`
-			await db.query(createSubTableSql)
+			await client.query(createSubTableSql)
 
 			const createHistoryTableSql = `
 				CREATE TABLE IF NOT EXISTS sub_history (
@@ -62,22 +64,26 @@ async function ensure_tables_exist() {
 					"insertTime"    TIMESTAMPTZ DEFAULT NOW()
 				);
 			`
-			await db.query(createHistoryTableSql)
+			await client.query(createHistoryTableSql)
 
 			const createIndexSql1 = `CREATE INDEX IF NOT EXISTS idx_sub_user_deleteTime ON sub (user_id, "deleteTime");`
 			const createIndexSql2 = `CREATE INDEX IF NOT EXISTS idx_sub_history_subId ON sub_history (sub_id);`
-			await db.query(createIndexSql1)
-			await db.query(createIndexSql2)
+			await client.query(createIndexSql1)
+			await client.query(createIndexSql2)
 
-			await db.query('COMMIT')
+			await client.query('COMMIT')
 			console.log('订阅周期管家数据库初始化成功！')
 		}
 		hasCheckedDb = true
 	} catch (error) {
 		console.error('自动初始化数据库失败:', error)
 		try {
-			await db.query('ROLLBACK')
+			await client?.query('ROLLBACK')
 		} catch (rbError) {}
+		// 迁移执行器依赖异常判断失败，不能吞掉错误后误记版本
+		throw error
+	} finally {
+		client?.release()
 	}
 }
 
@@ -508,7 +514,6 @@ export default async (req, resp) => {
 	const userId = req.user.userId
 
 	// 自动运行数据库建表检测
-	await ensure_tables_exist()
 
 	try {
 		if (actions[method]?.[action]) {

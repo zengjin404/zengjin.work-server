@@ -298,7 +298,7 @@ describe('dphxb_schema - 校验与清洗', () => {
 })
 
 describe('api/_dphxb.js - 对局结算与撤回接口', () => {
-	function mock_db_init() {
+	async function mock_db_init() {
 		mockQuery
 			.mockResolvedValueOnce({ rows: [], rowCount: 0 }) // CREATE TABLE
 			.mockResolvedValueOnce({ rows: [], rowCount: 0 }) // ALTER TABLE ADD COLUMNS
@@ -307,10 +307,14 @@ describe('api/_dphxb.js - 对局结算与撤回接口', () => {
 			.mockResolvedValueOnce({ rows: [], rowCount: 0 }) // INDEX mode
 			.mockResolvedValueOnce({ rows: [], rowCount: 0 }) // INDEX winner
 			.mockResolvedValueOnce({ rows: [], rowCount: 0 }) // INDEX endgame
+
+		// 结构初始化已移出请求路径，由部署期迁移显式执行
+		const { ensure_dbInitialized_async } = await import('../../api/_dphxb.js')
+		await ensure_dbInitialized_async()
 	}
 
 	it('建表语句使用 TIMESTAMP 无时区并带 Asia/Shanghai', async () => {
-		mock_db_init()
+		await mock_db_init()
 		mockQuery.mockResolvedValueOnce({ rows: [{ total: '0' }] }) // count recent
 		mockQuery.mockResolvedValueOnce({ rows: [{ id: 'record_123' }], rowCount: 1 }) // insert
 
@@ -323,7 +327,7 @@ describe('api/_dphxb.js - 对局结算与撤回接口', () => {
 	})
 
 	it('登录用户正常保存，user_id 取自 Token', async () => {
-		mock_db_init()
+		await mock_db_init()
 		mockQuery.mockResolvedValueOnce({ rows: [{ total: '0' }] }) // count recent
 		mockQuery.mockResolvedValueOnce({ rows: [{ id: 'rec_auth_001' }], rowCount: 1 }) // insert
 
@@ -350,7 +354,7 @@ describe('api/_dphxb.js - 对局结算与撤回接口', () => {
 	})
 
 	it('未登录用户正常保存，user_id 存为 null', async () => {
-		mock_db_init()
+		await mock_db_init()
 		mockQuery.mockResolvedValueOnce({ rows: [{ id: 'rec_anon_001' }], rowCount: 1 }) // insert
 
 		const handler = await load_dphxb()
@@ -365,7 +369,7 @@ describe('api/_dphxb.js - 对局结算与撤回接口', () => {
 	})
 
 	it('幂等重试命中：返回已存在记录 ID，标记 repeated: true', async () => {
-		mock_db_init()
+		await mock_db_init()
 		mockQuery.mockResolvedValueOnce({ rows: [] }) // ON CONFLICT DO NOTHING 返回空 rows
 		mockQuery.mockResolvedValueOnce({ rows: [{ id: 'existing_id_999' }] }) // 回查已有行
 
@@ -380,7 +384,7 @@ describe('api/_dphxb.js - 对局结算与撤回接口', () => {
 	})
 
 	it('终局后悔棋替代机制：传入 supersededRequestId 时自动标记旧记录失效并建立关联', async () => {
-		mock_db_init()
+		await mock_db_init()
 		mockQuery.mockResolvedValueOnce({ rows: [{ total: '0' }] }) // count recent
 		mockQuery.mockResolvedValueOnce({ rowCount: 1 }) // UPDATE superseded
 		mockQuery.mockResolvedValueOnce({ rows: [{ id: 'rec_new_branch' }], rowCount: 1 }) // insert
@@ -406,7 +410,7 @@ describe('api/_dphxb.js - 对局结算与撤回接口', () => {
 	})
 
 	it('actions.post.revoke 能够主动将指定对局标记为失效', async () => {
-		mock_db_init()
+		await mock_db_init()
 		mockQuery.mockResolvedValueOnce({ rowCount: 1 }) // UPDATE
 
 		const handler = await load_dphxb()
@@ -422,7 +426,7 @@ describe('api/_dphxb.js - 对局结算与撤回接口', () => {
 	})
 
 	it('登录用户限频拦截：一分钟超过 15 局时拦截', async () => {
-		mock_db_init()
+		await mock_db_init()
 		mockQuery.mockResolvedValueOnce({ rows: [{ total: '15' }] }) // 达到 15 局
 
 		const handler = await load_dphxb()

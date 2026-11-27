@@ -94,6 +94,10 @@ describe('jndv 业务模块单元测试', () => {
 			]
 			mockQuery.mockResolvedValueOnce({ rows: fakeSeats })
 
+			// 结构初始化已移出请求路径，由部署期迁移显式执行
+			const { ensure_dbInitialized_async } = await import('../../api/_jndv.js')
+			await ensure_dbInitialized_async()
+
 			const req = {
 				method: 'GET',
 				url: '/api/jndv/select',

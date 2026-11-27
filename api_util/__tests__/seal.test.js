@@ -49,12 +49,15 @@ async function call_api(handler, url, method, headers = {}, body = {}) {
 const user_token = () => `Bearer ${generateAccessToken({ userId: 'u123', username: 'tester_zengjin' })}`
 const admin_token = () => `Bearer ${generateAccessToken({ userId: 'admin001', username: 'admin' })}`
 
-/** 建表阶段 3 条语句：CREATE TABLE + 用户索引 + 幂等唯一索引 */
-function mock_ensure() {
+/** 建表阶段 3 条语句：CREATE TABLE + 用户索引 + 幂等唯一索引（结构初始化已移出请求路径） */
+async function mock_ensure() {
 	mockQuery
 		.mockResolvedValueOnce({ rows: [], rowCount: 0 }) // CREATE TABLE
 		.mockResolvedValueOnce({ rows: [], rowCount: 0 }) // CREATE INDEX (user_id, createtime)
 		.mockResolvedValueOnce({ rows: [], rowCount: 0 }) // CREATE UNIQUE INDEX (user_id, request_id)
+
+	const { ensure_dbInitialized_async } = await import('../../api/_base/seal.js')
+	await ensure_dbInitialized_async()
 }
 
 /**
@@ -159,7 +162,7 @@ const insert_calls = () => mockQuery.mock.calls.filter(c => String(c[0]).include
 describe('seal.record — 导出记录写入', () => {
 	it('未登录时被认证中间件拦下：写真实 401，且一条写库语句都不发', async () => {
 		const sealHandler = await load_seal()
-		mock_ensure()
+		await mock_ensure()
 
 		const res = await call_api(sealHandler, '/api/base/seal/record', 'POST', {}, make_payload())
 
@@ -170,7 +173,7 @@ describe('seal.record — 导出记录写入', () => {
 
 	it('登录用户写入成功：user_id 取自 Token、时间由 SQL 生成、只回 recordId', async () => {
 		const sealHandler = await load_seal()
-		mock_ensure()
+		await mock_ensure()
 		mockQuery.mockResolvedValueOnce({ rows: [{ total: '0' }] }) // 限频计数
 		mockQuery.mockResolvedValueOnce({ rows: [{ id: 'rec001' }] }) // INSERT ... RETURNING id
 
@@ -199,7 +202,7 @@ describe('seal.record — 导出记录写入', () => {
 
 	it('请求体里自报身份/时间的字段一律拒收（身份与时序只由服务端决定）', async () => {
 		const sealHandler = await load_seal()
-		mock_ensure()
+		await mock_ensure()
 
 		// 逐个字段单独试：一次塞三个的话，只要有一个被拦就够了，另外两个白名单有没有漏就测不出来
 		for (const field of ['userId', 'username', 'createdAt', 'createtime', 'timestamp', 'ip', 'userAgent']) {
@@ -222,7 +225,7 @@ describe('seal.record — 导出记录写入', () => {
 
 	it('未知字段过不去：连 demoMark 里塞一个 enabled 都会被拒（策略不是配置）', async () => {
 		const sealHandler = await load_seal()
-		mock_ensure()
+		await mock_ensure()
 
 		const payload = make_payload()
 		payload.configSnapshot.demoMark.enabled = false
@@ -236,7 +239,7 @@ describe('seal.record — 导出记录写入', () => {
 
 	it('越界数值与非法形状：拒收而不是夹取（夹取会把构造的请求洗成正常记录）', async () => {
 		const sealHandler = await load_seal()
-		mock_ensure()
+		await mock_ensure()
 		mockQuery.mockResolvedValue({ rows: [{ total: '0' }] })
 
 		const tooBig = make_payload()
@@ -261,7 +264,7 @@ describe('seal.record — 导出记录写入', () => {
 
 	it('外壳与快照必须自洽：templateId / shape / outputSize 对不上就拒收', async () => {
 		const sealHandler = await load_seal()
-		mock_ensure()
+		await mock_ensure()
 
 		// 三项都要单独试：外壳值本身都是合法枚举，只有「与快照不一致」这一条能拦下它们，
 		// 少一项就少一道 —— 列上是 A、快照里是 B 的记录比没有记录还糟
@@ -282,7 +285,7 @@ describe('seal.record — 导出记录写入', () => {
 
 	it('超深与超大载荷在解构前就被挡下', async () => {
 		const sealHandler = await load_seal()
-		mock_ensure()
+		await mock_ensure()
 
 		// 深度：payload → a → b → c → d → e，超过上限 5
 		const deep = make_payload()
@@ -303,7 +306,7 @@ describe('seal.record — 导出记录写入', () => {
 
 	it('限频：窗口内记录数到顶时挡回，且不再写库', async () => {
 		const sealHandler = await load_seal()
-		mock_ensure()
+		await mock_ensure()
 		mockQuery.mockResolvedValueOnce({ rows: [{ total: '10' }] })
 
 		const res = await call_api(sealHandler, '/api/base/seal/record', 'POST', { authorization: user_token() }, make_payload())
@@ -321,7 +324,7 @@ describe('seal.record — 导出记录写入', () => {
 
 	it('幂等命中：同 requestId 重放不重复插，取回原记录 id 并照常放行', async () => {
 		const sealHandler = await load_seal()
-		mock_ensure()
+		await mock_ensure()
 		mockQuery.mockResolvedValueOnce({ rows: [{ total: '1' }] }) // 限频计数
 		mockQuery.mockResolvedValueOnce({ rows: [] }) // INSERT ... DO NOTHING 没插进去
 		mockQuery.mockResolvedValueOnce({ rows: [{ id: 'rec_old' }] }) // 取回已存在那条
@@ -338,7 +341,7 @@ describe('seal.record — 导出记录写入', () => {
 
 	it('库异常时不泄露内部细节：统一回一句通用提示', async () => {
 		const sealHandler = await load_seal()
-		mock_ensure()
+		await mock_ensure()
 		mockQuery.mockResolvedValueOnce({ rows: [{ total: '0' }] })
 		mockQuery.mockRejectedValueOnce(new Error('relation "public.base_seal_export_log" does not exist'))
 
@@ -354,7 +357,7 @@ describe('seal.record — 导出记录写入', () => {
 describe('seal 表结构 — 只存该存的', () => {
 	it('建表 SQL：无时区 TIMESTAMP + 北京时间默认值，且没有任何图片/网络标识列', async () => {
 		const sealHandler = await load_seal()
-		mock_ensure()
+		await mock_ensure()
 		mockQuery.mockResolvedValueOnce({ rows: [{ total: '0' }] })
 		mockQuery.mockResolvedValueOnce({ rows: [{ id: 'rec001' }] })
 
@@ -383,7 +386,7 @@ describe('seal 表结构 — 只存该存的', () => {
 describe('seal 没有清理入口 — 记录一旦写入就永久保留', () => {
 	it('cleanup 不是任何动作：连管理员来也只回「未匹配」，且一条 SQL 都不发', async () => {
 		const sealHandler = await load_seal()
-		mock_ensure()
+		await mock_ensure()
 
 		const res = await call_api(sealHandler, '/api/base/seal/cleanup', 'POST', { authorization: admin_token() })
 
@@ -396,7 +399,7 @@ describe('seal 没有清理入口 — 记录一旦写入就永久保留', () => 
 
 	it('SQL 层不留残留：没有 retention 字段、没有 DELETE、索引恰好两条', async () => {
 		const sealHandler = await load_seal()
-		mock_ensure()
+		await mock_ensure()
 		mockQuery.mockResolvedValueOnce({ rows: [{ total: '0' }] })
 		mockQuery.mockResolvedValueOnce({ rows: [{ id: 'rec001' }] })
 

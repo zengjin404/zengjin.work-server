@@ -62,7 +62,7 @@ function check_ip_rate_limit(ip) {
 /**
  * 自动建表与索引（幂等）
  */
-async function ensure_dbInitialized_async() {
+export async function ensure_dbInitialized_async() {
 	if (dbInitialized) return
 
 	await db.query(`
@@ -199,7 +199,6 @@ const actions = { post: {}, get: {} }
  * 撤销 / 标记失效已有终局记录（终局后悔棋）
  */
 actions.post.revoke = async ({ body }) => {
-	await ensure_dbInitialized_async()
 	const requestId = typeof body?.requestId === 'string' ? body.requestId.trim() : ''
 	if (!requestId || requestId.length > 64) {
 		return base.respFailure({ msg: 'requestId 参数不合法' })
@@ -221,8 +220,6 @@ actions.post.revoke = async ({ body }) => {
  * 记录一局完成的对局数据
  */
 actions.post.finish = async ({ req, body }) => {
-	await ensure_dbInitialized_async()
-
 	// 1. 数据校验与白名单过滤
 	let payload
 	try {

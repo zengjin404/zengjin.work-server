@@ -6,13 +6,12 @@ import { clear_refresh_cookie, refresh_cookie } from '#api_util/cookie.js'
 import { decryptPassword, encryptPassword, hashToken } from '#api_util/crypto.js'
 import db from '#api_util/db.js'
 import { generateAccessToken, generateRefreshToken } from '#api_util/jwt.js'
-import { check_smsVerifyCode, send_smsVerifyCode } from '#api_util/sms_alicloud.js'
 
 /**
  * 自动确保 base_user 表中存在 avatar 字段并纠正桶域名
  */
 let avatarColumnChecked = false
-async function ensure_avatarColumn() {
+export async function ensure_avatarColumn() {
 	if (avatarColumnChecked) return
 	try {
 		await db.query('ALTER TABLE base_user ADD COLUMN IF NOT EXISTS avatar TEXT')
@@ -24,6 +23,8 @@ async function ensure_avatarColumn() {
 		avatarColumnChecked = true
 	} catch (err) {
 		console.error('[DB] 自动检查/增加 avatar 字段:', err.message)
+		// 迁移执行器依赖异常判断失败，不能吞掉错误后误记版本
+		throw err
 	}
 }
 
@@ -47,8 +48,6 @@ const actions = {
 		 */
 		me: requireAuth(async ({ req }) => {
 			const { userId } = req.user
-
-			await ensure_avatarColumn()
 
 			let users = []
 			let error = null
@@ -537,8 +536,6 @@ const actions = {
 			}
 
 			try {
-				await ensure_avatarColumn()
-
 				binds.push(base.getTime())
 				fields.push(`"updateTime" = $${binds.length}`)
 
@@ -591,7 +588,6 @@ const actions = {
 
 				await db.query('UPDATE base_user SET phone = $1, "updateTime" = NOW() WHERE id = $2', [phone, userId])
 
-				await ensure_avatarColumn()
 				const updated = await db.query('SELECT id, username, phone, nickname, avatar, "status", "createTime" FROM base_user WHERE id = $1 LIMIT 1', [
 					userId,
 				])
@@ -781,7 +777,8 @@ const actions = {
 				console.error('查询手机号失败:', err)
 			}
 
-			// 调用阿里云发送短信
+			// 调用阿里云发送短信（仅短信动作加载 @alicloud SDK）
+			const { send_smsVerifyCode } = await import('#api_util/sms_alicloud.js')
 			const smsRes = await send_smsVerifyCode(phone)
 			if (!smsRes.success) {
 				return base.respFailure({ msg: smsRes.msg })
@@ -804,7 +801,8 @@ const actions = {
 				return base.respFailure({ msg: `缺少必填参数: ${invalids}` })
 			}
 
-			// 调用阿里云核验
+			// 调用阿里云核验（仅短信动作加载 @alicloud SDK）
+			const { check_smsVerifyCode } = await import('#api_util/sms_alicloud.js')
 			const verifyRes = await check_smsVerifyCode(phone, code)
 			if (!verifyRes.success) {
 				return base.respFailure({ msg: verifyRes.msg })

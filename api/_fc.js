@@ -1,6 +1,8 @@
-import provider from '#api_util/_storage_provider.js'
 import base from '#api_util/base.js'
 import db from '#api_util/db.js'
+
+// 七牛管理仅在删除/清理文件的动作中需要；fc/select 不应加载 qiniu
+const get_provider = () => import('#api_util/_storage_provider.js').then(module => module.default)
 
 const BUCKET = 'cdn'
 const actions = { get: {}, post: {} }
@@ -235,6 +237,7 @@ actions.post.insert = async ({ body }) => {
 /** 更新游戏（含文件清理 + 关联表同步） */
 actions.post.update = async ({ body }) => {
 	if (!body.id) return base.respFailure({ msg: 'id 参数缺失' })
+	const provider = await get_provider()
 
 	try {
 		// 读取旧记录，用于文件对比
@@ -374,6 +377,7 @@ actions.post.restore = async ({ body }) => {
 /** 硬删除（清除文件 + 关联数据 + 主表） */
 actions.post.hardDelete = async ({ body }) => {
 	if (!body.id) return base.respFailure({ msg: 'id 参数缺失' })
+	const provider = await get_provider()
 	try {
 		// 清理存储文件：列举 fc/{id}/ 前缀下所有文件
 		try {
@@ -492,6 +496,7 @@ actions.post.insertBanner = async ({ body }) => {
 /** 更新 Banner */
 actions.post.updateBanner = async ({ body }) => {
 	if (!body.id) return base.respFailure({ msg: 'id 参数缺失' })
+	const provider = await get_provider()
 	try {
 		const oldRes = await db.query('SELECT image FROM fc_banner WHERE id = $1', [body.id])
 		await db.query('UPDATE fc_banner SET "fcId" = $1, image = $2, link = $3, sort = $4 WHERE id = $5', [
@@ -518,6 +523,7 @@ actions.post.updateBanner = async ({ body }) => {
 /** 删除 Banner（含文件清理） */
 actions.post.deleteBanner = async ({ body }) => {
 	if (!body.id) return base.respFailure({ msg: 'id 参数缺失' })
+	const provider = await get_provider()
 	try {
 		const oldRes = await db.query('SELECT image FROM fc_banner WHERE id = $1', [body.id])
 		await db.query('DELETE FROM fc_banner WHERE id = $1', [body.id])

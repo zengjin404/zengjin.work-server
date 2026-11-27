@@ -1,6 +1,4 @@
-import { checkAuth } from '#api_util/auth_middleware.js'
 import base from '#api_util/base.js'
-import db from '#api_util/db.js'
 
 const actions = {
 	get: {},
@@ -47,6 +45,8 @@ actions.get.sayhi = async options => {
 
 /* 鉴权测试 */
 actions.get.auth = async options => {
+	// 仅 auth 动作需要 JWT 鉴权，按需加载，避免 demo/hello 也加载 jsonwebtoken
+	const { checkAuth } = await import('#api_util/auth_middleware.js')
 	// 直接在此拦截。如果不通过，checkAuth 内部会自动执行 resp.status 并结束流返回 false
 	if (!(await checkAuth(base.req, base.resp))) {
 		return

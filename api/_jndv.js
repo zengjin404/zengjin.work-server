@@ -58,9 +58,9 @@ const SEAT_PRESETS = [
 ]
 
 /**
- * 确保表结构与种子数据已初始化 (异步，首次请求触发)
+ * 确保表结构与种子数据已初始化（部署期迁移调用，不再由请求触发）
  */
-async function ensure_dbInitialized_async() {
+export async function ensure_dbInitialized_async() {
 	if (dbInitialized) return
 
 	await db.query(`
@@ -193,8 +193,6 @@ export default async function jndvHandler(req, resp) {
 		reqInfo.action
 
 	try {
-		await ensure_dbInitialized_async()
-
 		// ---- 问答门：进门前的验证，登录可选 ----
 		if (method === 'get' && action === 'gate') {
 			// 有 Token 就顺便认一下：已登录用户不必再答一遍

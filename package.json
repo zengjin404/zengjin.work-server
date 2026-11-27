@@ -11,6 +11,8 @@
 		"preview": "node ./vite.preview.js",
 		"test": "vitest run",
 		"test:watch": "vitest",
+		"db:migrate:check": "node --env-file=.env scripts/migrate-db.mjs --check",
+		"db:migrate": "node --env-file=.env scripts/migrate-db.mjs --apply",
 		"edgeone:prepare": "node scripts/prepare-edgeone.mjs",
 		"edgeone:verify": "node scripts/verify-edgeone-dist.mjs",
 		"edgeone:bundle": "node scripts/bundle-edgeone-function.mjs",

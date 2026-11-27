@@ -380,11 +380,11 @@ function prepare_app_payload(body = {}, { partial = false } = {}) {
 let dbInitialized = false
 
 /**
- * 确保表结构与种子数据已初始化 (异步，首个请求触发)
+ * 确保表结构与种子数据已初始化（部署期迁移调用，不再由请求触发）
  * 种子采用「幂等增量补齐」：计数不足 presets.length 时用 ON CONFLICT DO NOTHING 补插，
- * 云端断连导致的半种子会在下一次请求自动补齐，无需事务也能自愈
+ * 云端断连导致的半种子会在下一次迁移重放时自动补齐，无需事务也能自愈
  */
-async function ensure_dbInitialized_async() {
+export async function ensure_dbInitialized_async() {
 	if (dbInitialized) return
 
 	// 建表（desc 为 Postgres 非保留关键字，按 ai.js 惯例加引号规避歧义）
@@ -417,7 +417,7 @@ async function ensure_dbInitialized_async() {
 	await db.query(`ALTER TABLE base_app ADD COLUMN IF NOT EXISTS image VARCHAR(500) DEFAULT ''`)
 	// 幂等迁移：扩大 category 字段长度以支持多分类存储
 	await db.query(`ALTER TABLE base_app ALTER COLUMN category TYPE VARCHAR(100)`)
-	// 一次性迁移标记表：分类重构只执行一次，避免冷启动覆盖管理员调整
+	// 一次性迁移标记表：分类重构只执行一次，避免重复迁移覆盖管理员调整
 	await db.query(`
 		CREATE TABLE IF NOT EXISTS base_app_migration (
 			key         VARCHAR(64) PRIMARY KEY,
@@ -554,7 +554,6 @@ export default async (req, resp) => {
 
 	try {
 		// 建表/种子对所有入口统一前置（含管理端 CRUD），幂等缓存保证只执行一次
-		await ensure_dbInitialized_async()
 
 		if (actions[method]?.[action]) {
 			const handler = actions[method][action]

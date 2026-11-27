@@ -18,11 +18,13 @@ describe('EdgeOne 入口回归', () => {
 		expect(text).toContain('export default async function main')
 	})
 
-	it('api/index.js 对 doc/firebase 使用动态 import', async () => {
+	it('api/index.js 只静态引入 base，业务 handler 全部按路由动态 import', async () => {
 		const text = await source('api/index.js')
-		expect(text).toContain("await import('./_doc.js')")
-		expect(text).toContain("await import('./_firebase.js')")
-		expect(text).not.toContain("import docHandler from './_doc.js'")
+		expect(text).toContain("import base from '#api_util/base.js'")
+		expect(text).toContain("() => import('./_doc.js')")
+		expect(text).toContain("() => import('./_firebase.js')")
+		// 顶层不得再出现业务 handler 的静态 import
+		expect(text).not.toMatch(/^import\s+(?!base)[^;]*from\s+['"]\.\/_/m)
 	})
 
 	it('api_util/ws.js 不再依赖未声明的 node-fetch', async () => {

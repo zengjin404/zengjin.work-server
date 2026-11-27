@@ -1,6 +1,8 @@
 import dns from 'dns'
 import pkg from 'pg'
 
+import base from './base.js'
+
 // 强制 Node.js (v17+) 在 DNS 解析时优先使用 IPv4，避免延迟
 dns.setDefaultResultOrder('ipv4first')
 
@@ -63,22 +65,32 @@ export function getPool(name) {
 		})
 
 		// 增强 pool.query 自动重试 1 次机制（防止云端 Pooler 短暂切断导致偶发报错）
+		// 同时把普通查询耗时累加到请求级 perf（仅日志，不改 SQL / 连接池参数）
 		const rawQuery = pool.query.bind(pool)
 		pool.query = async function (...args) {
+			const perf = base.storage.getStore()?.perf
+			const started = perf ? performance.now() : 0
 			try {
-				return await rawQuery(...args)
-			} catch (err) {
-				const isConnDrop =
-					err.message &&
-					(err.message.includes('Connection terminated') ||
-						err.message.includes('connection terminated') ||
-						err.message.includes('closed') ||
-						err.message.includes('ECONNRESET'))
-				if (isConnDrop) {
-					console.warn(`[DB Pool ${key}] 底层连接被云端切断，正在自动重建并重试查询...`)
+				try {
 					return await rawQuery(...args)
+				} catch (err) {
+					const isConnDrop =
+						err.message &&
+						(err.message.includes('Connection terminated') ||
+							err.message.includes('connection terminated') ||
+							err.message.includes('closed') ||
+							err.message.includes('ECONNRESET'))
+					if (isConnDrop) {
+						console.warn(`[DB Pool ${key}] 底层连接被云端切断，正在自动重建并重试查询...`)
+						return await rawQuery(...args)
+					}
+					throw err
 				}
-				throw err
+			} finally {
+				if (perf) {
+					perf.db_ms += performance.now() - started
+					perf.db_calls++
+				}
 			}
 		}
 

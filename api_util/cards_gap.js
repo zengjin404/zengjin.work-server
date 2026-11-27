@@ -10,7 +10,6 @@ import {
 	sanitize_gap_report_payload,
 } from '#api_util/notification_schema.js'
 import {
-	ensure_notification_db_async,
 	get_notification_setting_async,
 	hit_rate_limit_async,
 	resolve_notification_async,
@@ -336,8 +335,7 @@ export async function resolve_cards_content_gaps_async({ categoryIds = [], reaso
 	const ids = [...new Set((categoryIds || []).map(id => String(id || '').trim()).filter(Boolean))]
 	if (!ids.length && !all) return { checked: 0, resolved: 0 }
 
-	// 内容写操作可能先于通知模块首次请求发生，这里保证通知表可用
-	await ensure_notification_db_async()
+	// 通知表由部署期迁移（scripts/migrate-db.mjs --apply）保证存在，请求路径不再执行 DDL
 	// 开关关闭时只停止接收新上报，也不允许自动消警历史通知
 	const enabled = await get_notification_setting_async('content_gap_alert_enabled', false)
 	if (!enabled) return { checked: 0, resolved: 0, disabled: true }
