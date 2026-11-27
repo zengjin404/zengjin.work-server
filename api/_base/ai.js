@@ -510,14 +510,16 @@ actions.get.admin_models = requireAuth(async ({ query }) => {
 		const whereStr = wheres.length ? `WHERE ${wheres.join(' AND ')}` : ''
 		const joinStr = 'FROM base_ai m JOIN base_ai_provider p ON p.id = m."providerId"'
 
-		const countRes = await db.query(`SELECT COUNT(*) ${joinStr} ${whereStr}`, binds)
+		// list 与 count 无数据依赖，并行发出；两条 SQL、绑定与分页语义保持不变
+		const [countRes, listRes] = await Promise.all([
+			db.query(`SELECT COUNT(*) ${joinStr} ${whereStr}`, binds),
+			db.query(
+				`SELECT m.id, m.name, m."providerId", m.model, m."desc", m.status, m."isReasoning", m.search, m.sort, m.speed, p.name AS domain, p.provider AS provider
+				 ${joinStr} ${whereStr} ORDER BY m.sort ASC, m."createTime" DESC LIMIT $${idx} OFFSET $${idx + 1}`,
+				[...binds, pageSize, offset],
+			),
+		])
 		const total = parseInt(countRes.rows[0]?.count) || 0
-
-		const listRes = await db.query(
-			`SELECT m.id, m.name, m."providerId", m.model, m."desc", m.status, m."isReasoning", m.search, m.sort, m.speed, p.name AS domain, p.provider AS provider
-			 ${joinStr} ${whereStr} ORDER BY m.sort ASC, m."createTime" DESC LIMIT $${idx} OFFSET $${idx + 1}`,
-			[...binds, pageSize, offset],
-		)
 
 		return base.respSuccess({
 			data: base.formatDbRows(listRes.rows),
@@ -618,17 +620,19 @@ actions.get.admin_providers = requireAuth(async ({ query }) => {
 		}
 
 		const whereStr = wheres.length ? `WHERE ${wheres.join(' AND ')}` : ''
-		const countRes = await db.query(`SELECT COUNT(*) FROM base_ai_provider p ${whereStr}`, binds)
+		// list 与 count 无数据依赖，并行发出；COUNT 仍只统计服务商表
+		const [countRes, listRes] = await Promise.all([
+			db.query(`SELECT COUNT(*) FROM base_ai_provider p ${whereStr}`, binds),
+			db.query(
+				`SELECT p.id, p.name, p.domain, p.provider, p.url, p."desc", p.status, p.sort, p."createTime", p."updateTime",
+					(SELECT COUNT(*) FROM base_ai m WHERE m."providerId" = p.id) AS "modelCount",
+					CASE WHEN p.key IS NULL OR p.key = '' THEN '' ELSE '****' || RIGHT(p.key, 4) END AS "keyMasked"
+				 FROM base_ai_provider p ${whereStr}
+				 ORDER BY p.sort ASC, p."createTime" DESC LIMIT $${idx} OFFSET $${idx + 1}`,
+				[...binds, pageSize, offset],
+			),
+		])
 		const total = parseInt(countRes.rows[0]?.count) || 0
-
-		const listRes = await db.query(
-			`SELECT p.id, p.name, p.domain, p.provider, p.url, p."desc", p.status, p.sort, p."createTime", p."updateTime",
-				(SELECT COUNT(*) FROM base_ai m WHERE m."providerId" = p.id) AS "modelCount",
-				CASE WHEN p.key IS NULL OR p.key = '' THEN '' ELSE '****' || RIGHT(p.key, 4) END AS "keyMasked"
-			 FROM base_ai_provider p ${whereStr}
-			 ORDER BY p.sort ASC, p."createTime" DESC LIMIT $${idx} OFFSET $${idx + 1}`,
-			[...binds, pageSize, offset],
-		)
 
 		return base.respSuccess({
 			data: base.formatDbRows(listRes.rows),

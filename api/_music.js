@@ -85,14 +85,12 @@ const actions = {
 			}
 
 			try {
-				const countRes = await db.query(`SELECT COUNT(*) FROM "${table}" ${whereStr}`, binds)
-				const total = parseInt(countRes.rows[0]?.count || 0)
-
-				const listRes = await db.query(`SELECT * FROM "${table}" ${whereStr} ORDER BY ${orderBy} LIMIT $${idx} OFFSET $${idx + 1}`, [
-					...binds,
-					pageSize,
-					offset,
+				// list 与 count 无数据依赖，并行发出；筛选、排序与分页语义不变
+				const [countRes, listRes] = await Promise.all([
+					db.query(`SELECT COUNT(*) FROM "${table}" ${whereStr}`, binds),
+					db.query(`SELECT * FROM "${table}" ${whereStr} ORDER BY ${orderBy} LIMIT $${idx} OFFSET $${idx + 1}`, [...binds, pageSize, offset]),
 				])
+				const total = parseInt(countRes.rows[0]?.count || 0)
 
 				const data = base.formatDbRows(listRes.rows)
 				return base.respSuccess({ data, total })

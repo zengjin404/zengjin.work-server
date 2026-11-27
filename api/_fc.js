@@ -43,18 +43,18 @@ actions.get.select = async ({ query }) => {
 	const whereStr = wheres.length ? `WHERE ${wheres.join(' AND ')}` : ''
 
 	try {
-		// 总数
-		const countRes = await db.query(`SELECT COUNT(*) FROM fc ${whereStr}`, binds)
+		// 总数与列表互不依赖，并行发出；分类查询依赖列表 id，保留在之后串行
+		const [countRes, listRes] = await Promise.all([
+			db.query(`SELECT COUNT(*) FROM fc ${whereStr}`, binds),
+			db.query(
+				`SELECT id, name, cover, maker, "playerCount", "playCount", sort, "insertTime"
+				 FROM fc ${whereStr}
+				 ORDER BY sort DESC, ${orderBy}
+				 LIMIT $${idx} OFFSET $${idx + 1}`,
+				[...binds, pageSize, offset],
+			),
+		])
 		const total = parseInt(countRes.rows[0].count)
-
-		// 列表
-		const listRes = await db.query(
-			`SELECT id, name, cover, maker, "playerCount", "playCount", sort, "insertTime"
-			 FROM fc ${whereStr}
-			 ORDER BY sort DESC, ${orderBy}
-			 LIMIT $${idx} OFFSET $${idx + 1}`,
-			[...binds, pageSize, offset],
-		)
 
 		// 批量查分类（用于卡片展示前 2 个分类标签）
 		const ids = listRes.rows.map(r => r.id)

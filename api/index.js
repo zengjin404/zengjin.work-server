@@ -18,6 +18,10 @@ function create_perf() {
 		handler_ms: 0,
 		db_ms: 0,
 		db_calls: 0,
+		acquire_ms: 0,
+		acquire_calls: 0,
+		connect_ms: 0,
+		connect_calls: 0,
 	}
 }
 
@@ -25,8 +29,10 @@ function log_perf(req, perf) {
 	const total_ms = performance.now() - perf.start
 	if (total_ms < 500 && process.env.PERF_LOG !== '1') return
 	// 只记录公开路由、方法、耗时；不记录 query、body、Header、Token、SQL 参数。
+	// query_ms 为派生值（db_ms - acquire_ms），并行查询时是求和口径，不代表墙钟。
+	const query_ms = Math.max(0, perf.db_ms - perf.acquire_ms)
 	console.log(
-		`[api-perf] route=${perf.route || 'unknown'} method=${req.method} import_ms=${perf.import_ms.toFixed(1)} handler_ms=${perf.handler_ms.toFixed(1)} db_ms=${perf.db_ms.toFixed(1)} db_calls=${perf.db_calls} total_ms=${total_ms.toFixed(1)}`,
+		`[api-perf] route=${perf.route || 'unknown'} method=${req.method} import_ms=${perf.import_ms.toFixed(1)} handler_ms=${perf.handler_ms.toFixed(1)} db_ms=${perf.db_ms.toFixed(1)} query_ms=${query_ms.toFixed(1)} acquire_ms=${perf.acquire_ms.toFixed(1)} connect_ms=${perf.connect_ms.toFixed(1)} db_calls=${perf.db_calls} acquire_calls=${perf.acquire_calls} connect_calls=${perf.connect_calls} total_ms=${total_ms.toFixed(1)}`,
 	)
 }
 
