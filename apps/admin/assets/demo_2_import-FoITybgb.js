@@ -1,1 +1,0 @@
-import{$r as e,xi as t}from"./index-Do50ZgC1.js";import n from"./demo_2-cor0Iq-l.js";var r={__name:`demo_2_import`,setup(r){return(r,i)=>(t(),e(n,{h1:`demo_2_import`}))}};export{r as default};

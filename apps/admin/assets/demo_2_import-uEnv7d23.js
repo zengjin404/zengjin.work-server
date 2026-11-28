@@ -1,0 +1,1 @@
+import{Qr as e,bi as t}from"./index-DbXpug-K.js";import n from"./demo_2-BFrVHdGr.js";var r={__name:`demo_2_import`,setup(r){return(r,i)=>(t(),e(n,{h1:`demo_2_import`}))}};export{r as default};

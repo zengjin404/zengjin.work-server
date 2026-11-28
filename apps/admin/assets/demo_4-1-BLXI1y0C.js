@@ -1,1 +1,0 @@
-import{Qr as e,ti as t,w as n,xi as r}from"./index-Do50ZgC1.js";var i={};function a(n,i){return r(),t(`section`,null,[...i[0]||=[e(`h1`,null,`demo_4-1`,-1),e(`input`,null,null,-1)]])}var o=n(i,[[`render`,a]]);export{o as default};

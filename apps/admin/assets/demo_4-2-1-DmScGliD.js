@@ -1,0 +1,1 @@
+import{Zr as e,bi as t,ei as n,w as r}from"./index-DbXpug-K.js";var i={};function a(r,i){return t(),n(`section`,null,[...i[0]||=[e(`h1`,null,`demo_4-2-1`,-1),e(`input`,null,null,-1)]])}var o=r(i,[[`render`,a]]);export{o as default};

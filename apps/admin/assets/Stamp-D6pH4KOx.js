@@ -1,0 +1,1 @@
+import{Ci as e,D as t,Pi as n,Ri as r,Vi as i,_i as a,bi as o,ei as s}from"./index-DbXpug-K.js";var c=[`theme`],l={__name:`Stamp`,props:{theme:{type:String,default:`default`}},setup(l){let u=t(),d=l;return n(),a(()=>{}),(t,n)=>(o(),s(`div`,{class:`Stamp`,theme:r(u).theme,style:i(`color: var(--${d.theme})`)},[e(t.$slots,`default`)],12,c))}};export{l as t};

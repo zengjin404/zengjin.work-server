@@ -1,0 +1,1 @@
+import{Hi as e,Ri as t,Zr as n,bi as r,ei as i,m as a,p as o,w as s}from"./index-DbXpug-K.js";var c={class:`_panel`},l=s({__name:`index`,setup(s){let l=$config.title;return a(),o(),(a,o)=>(r(),i(`section`,c,[n(`h1`,null,e(t(l)),1)]))}},[[`__scopeId`,`data-v-01b76bb3`]]);export{l as default};

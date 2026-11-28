@@ -1,0 +1,1 @@
+import{Zr as e,bi as t,ei as n,w as r}from"./index-DbXpug-K.js";var i=r(Object.assign({name:Math.random().toString(36).slice(2)},{__name:`index`,setup(r){return(r,i)=>(t(),n(`section`,null,[...i[0]||=[e(`h1`,null,`系统状态`,-1)]]))}}),[[`__scopeId`,`data-v-b6874561`]]);export{i as default};

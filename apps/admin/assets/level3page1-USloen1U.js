@@ -1,0 +1,1 @@
+import{Jr as e,Zr as t,bi as n,ei as r}from"./index-DbXpug-K.js";var i=Object.assign({name:Math.random().toString(36).slice(2)},{__name:`level3page1`,setup(i){return(i,a)=>(n(),r(e,null,[a[0]||=t(`h1`,null,`level3page1.vue`,-1),a[1]||=t(`input`,null,null,-1)],64))}});export{i as default};

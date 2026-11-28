@@ -1,0 +1,1 @@
+import{$r as e,Pi as t,_i as n,bi as r,ei as i}from"./index-DbXpug-K.js";var a={class:`Monitor`},o=[`src`],s={__name:`Monitor`,props:{url:{type:String,default:``}},setup(s){let c=s;return t(``),n(()=>{}),(t,n)=>(r(),i(`div`,a,[c.url?(r(),i(`iframe`,{key:0,src:`plugin/JnWebPlayer/play_url.html?url=${c.url}`},null,8,o)):e(`v-if`,!0)]))}};export{s as default};
